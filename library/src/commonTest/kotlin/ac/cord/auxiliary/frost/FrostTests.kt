@@ -278,22 +278,31 @@ class FrostTests {
 
 
         val errorTestCases = tests.jsonObject["error_test_cases"]!!.jsonArray
-        for ((index, errorTestCase) in errorTestCases.withIndex()) {
-            val publicNonceIndices =
-                errorTestCase.jsonObject["pubnonce_indices"]!!.jsonArray.map { jsonElement ->
-                    jsonElement.jsonPrimitive.int
-                }
+        for (errorTestCase in errorTestCases) {
+            logger.d(errorTestCase.jsonObject["comment"]?.jsonPrimitive?.content ?: "")
+
+            val (expectedException, exceptionProcessor) = errorTestCase.getErrorDetails("error")
+
             val publicNonces =
-                testFrostPublicNonces.filterIndexed { index, _ -> publicNonceIndices.contains(index) }
+                errorTestCase.jsonObject["pubnonce_indices"]!!.jsonArray.map { jsonElement ->
+                    testFrostPublicNonces[jsonElement.jsonPrimitive.int]
+                }
 
             val identifiers =
                 errorTestCase.jsonObject["pubnonce_indices"]!!.jsonArray.map { jsonElement ->
-                    jsonElement.jsonPrimitive.int.toBigInteger().toByteArray()
+                    ByteVector32(
+                        jsonElement.jsonPrimitive.int.toBigInteger().to32LengthByteArray()
+                    )
                 }
 
-//          TODO:  val exception = assertFailsWith<InvalidContributionException> {
-//                Bip340.nonceAgg(publicNonces, identifiers)
+//            TODO: val throwable = assertFailsWith<InvalidContributionException> {
+//                Frost.nonceAgg(publicNonces, identifiers)
 //            }
+//
+//            throwable.testThrowable(
+//                expectedException,
+//                exceptionProcessor
+//            )
         }
     }
 
