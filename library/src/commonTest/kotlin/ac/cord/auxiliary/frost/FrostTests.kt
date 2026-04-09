@@ -5,7 +5,10 @@ import ac.cord.auxiliary.cryptography.Point
 import ac.cord.auxiliary.cryptography.to32LengthByteArray
 import ac.cord.auxiliary.cryptography.to8LengthByteArray
 import ac.cord.auxiliary.cryptography.toBigInteger
-import ac.cord.auxiliary.exceptions.InvalidContributionException
+import ac.cord.auxiliary.extensions.getErrorDetails
+import ac.cord.auxiliary.extensions.getValue
+import ac.cord.auxiliary.extensions.getValueOrNull
+import ac.cord.auxiliary.extensions.testThrowable
 import co.touchlab.kermit.Logger
 import com.ionspin.kotlin.bignum.integer.toBigInteger
 import fr.acinq.bitcoin.ByteVector32
@@ -15,7 +18,6 @@ import fr.acinq.secp256k1.Hex
 import fr.acinq.secp256k1.Secp256k1
 import korlibs.crypto.SecureRandom
 import kotlinx.serialization.json.*
-import kotlin.reflect.KClass
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
@@ -24,70 +26,8 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
-fun JsonElement.getValue(key: String): ByteArray {
-    return getValueOrNull(key)!!
-}
 
-fun JsonElement.getValueOrNull(key: String): ByteArray? = try {
-    jsonObject[key]?.jsonPrimitive?.content?.let { Hex.decode(it) }
-} catch (e: Throwable) {
-    null
-}
 
-fun JsonElement.getErrorDetails(key: String): Pair<KClass<out Throwable>, (Any) -> Boolean> {
-    val error = jsonObject[key]!!.jsonObject
-
-    return when (error["type"]!!.jsonPrimitive.content)  {
-        "invalid_contribution" -> {
-            Pair(
-                InvalidContributionException::class,
-                { e ->
-                    val invalidContributionException = e as? InvalidContributionException
-
-                    val contrib = error["contrib"]?.jsonPrimitive?.content
-                    val match = if (contrib != null) {
-                        invalidContributionException?.signerId == error["signer_id"]?.jsonPrimitive?.intOrNull?.toBigInteger() && invalidContributionException?.contrib == contrib
-                    } else {
-                        invalidContributionException?.signerId == error["signer_id"]?.jsonPrimitive?.intOrNull?.toBigInteger()
-                    }
-
-                    if (!match) {
-                        Logger.e("Expected: $error, actual: $e")
-                    }
-                    match
-                }
-            )
-
-        }
-        "value" -> {
-            Pair(
-                IllegalArgumentException::class,
-                { e ->
-                    val illegalArgumentException = e as? IllegalArgumentException
-
-                    val match = illegalArgumentException?.message == error["message"]?.jsonPrimitive?.content
-
-                    if (!match) {
-                        Logger.e("Expected: ${error["message"]?.jsonPrimitive?.content}, actual: ${illegalArgumentException?.message}")
-                    }
-
-                    match
-                }
-            )
-        }
-        else -> {
-            throw RuntimeException("Unsupported error type: $error")
-        }
-    }
-}
-
-fun Throwable.testThrowable(expectedException: KClass<out Throwable>, exceptionProcessor: (Throwable) -> Boolean) {
-    if (this::class == expectedException) {
-        assertTrue(exceptionProcessor(this))
-    } else {
-        throw AssertionError("Wrong exception raised in a test (expecting=${expectedException}).", this)
-    }
-}
 
 class FrostTests {
     val logger = Logger.withTag("FrostTests")
