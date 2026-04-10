@@ -31,7 +31,7 @@ data class FrostTweakContext(
 
     fun getPlainPublicKey(): PublicKey {
         return PublicKey(
-            Q.cbytes()
+            Q.compressedBytes()
         )
     }
 

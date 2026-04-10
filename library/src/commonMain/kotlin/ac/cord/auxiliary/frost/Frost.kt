@@ -1,6 +1,7 @@
 package ac.cord.auxiliary.frost
 
 import ac.cord.auxiliary.cryptography.CryptographicConstants
+import ac.cord.auxiliary.cryptography.GroupElement
 import ac.cord.auxiliary.cryptography.Point
 import ac.cord.auxiliary.cryptography.pow
 import ac.cord.auxiliary.cryptography.to4LengthByteArray
@@ -11,6 +12,7 @@ import ac.cord.auxiliary.cryptography.xor
 import ac.cord.auxiliary.exceptions.InvalidContributionException
 import co.touchlab.kermit.Logger
 import com.ionspin.kotlin.bignum.integer.BigInteger
+import com.ionspin.kotlin.bignum.integer.toBigInteger
 import fr.acinq.bitcoin.ByteVector32
 import fr.acinq.bitcoin.PublicKey
 import fr.acinq.bitcoin.XonlyPublicKey
@@ -55,11 +57,15 @@ object Frost {
         secretShare: ByteArray?,
         publicShare: PublicKey?,
         groupPublicKey: XonlyPublicKey?,
-        messagePrefixed: ByteArray,
-        extraIn: ByteArray
+        message: ByteArray?,
+        extraIn: ByteArray = byteArrayOf()
     ): Pair<FrostSecretNonce, FrostPublicNonce> {
         val rand = computeRand(rand_, secretShare)
 
+        val messagePrefixed = message?.let {
+            byteArrayOf(0x01) +
+                    message.size.to8LengthByteArray() + message
+        } ?: byteArrayOf(0x00)
         val k1 = nonceHash(
             rand,
             publicShare,
@@ -87,7 +93,7 @@ object Frost {
         require(Rs2 != null)
 
         val frostPublicNonce = FrostPublicNonce(
-            Rs1.cbytes() + Rs2.cbytes()
+            Rs1.compressedBytes() + Rs2.compressedBytes()
         )
         val frostSecretNonce = FrostSecretNonce(
             k1.toByteArray() + k2.toByteArray()
@@ -111,43 +117,40 @@ object Frost {
             secretShare = secretShare,
             publicShare = publicShare,
             groupPublicKey = groupPublicKey ,
-            messagePrefixed = message?.let {
-                byteArrayOf(0x01) +
-                message.size.to8LengthByteArray() + message
-            } ?: byteArrayOf(0x00),
+            message = message,
             extraIn = extraIn ?: byteArrayOf()
         )
     }
 
     fun nonceAgg(
-        frostPublicNonces: List<FrostPublicNonce>,
-        ids: List<ByteVector32>
+        frostPublicNonces: List<FrostPublicNonce>
     ): ByteArray {
-        if (frostPublicNonces.size != ids.size) {
-            throw IllegalArgumentException("The pubnonces and ids arrays must have the same length.")
-        }
         val aggNonce = mutableListOf<ByteArray>()
 
         for (j in 1..2) {
-            var R_j: Point? = null
-            ids.zip(frostPublicNonces).forEach { (my_id, publicNonce) ->
+            var R_j = GroupElement.INFINITY
+            frostPublicNonces.forEachIndexed { index, publicNonce ->
                 try {
                     val startingIndex =  (j-1)*33
                     val endingIndex = j*32 + (j-1)
 
-                    val R_ij = Point.fromCompressedBytes(publicNonce.value.sliceArray(startingIndex..endingIndex))
+                    val R_ij = GroupElement.fromCompressedBytes(
+                        PublicKey(
+                            publicNonce.value.sliceArray(startingIndex..endingIndex)
+                        )
+                    )
                     R_j = R_ij.add(R_j)
                 }  catch (e: Throwable) {
-                    throw InvalidContributionException(my_id.toBigInteger(), "pubnonce", e)
+                    throw InvalidContributionException(index.toBigInteger(), "pubnonce", e)
                 }
             }
-            if (R_j == null) { // It's infinity...
+            if (R_j.isInfinity) { // It's infinity...
                 aggNonce.add(
                     ByteArray(33)
                 )
             } else {
                 aggNonce.add(
-                    R_j.cbytesExt()
+                    R_j.toCompressedBytesWithInfinity().value.toByteArray()
                 )
             }
 
@@ -155,49 +158,36 @@ object Frost {
         return aggNonce.flatMap { it.asIterable() }.toByteArray()
     }
 
-    fun deriveInterpolatingValue(identifiers: List<ByteVector32>, myId: ByteVector32): BigInteger {
-        if (!identifiers.contains(myId)) {
-            throw IllegalArgumentException("The signer's id must be present in the participant identifier list.")
-        }
-        if (identifiers.toSet().size != identifiers.size) {
-            throw IllegalArgumentException("The participant identifier list must contain unique elements.")
-        }
-        val identifierInteger = myId.toBigInteger()
-        require(BigInteger.ONE <= identifierInteger)
-        require(identifierInteger < CryptographicConstants.n)
+    fun  deriveInterpolatingValue(identifiers: List<Int>, signerIdentifier: Int): BigInteger {
+        require(identifiers.contains(signerIdentifier)) { "Signer identifier needs to be among identifiers" }
 
+        require(signerIdentifier.toBigInteger() in BigInteger.ZERO..BigInteger.TWO.pow(32)) { "Signer identifier needs to be within supported range" }
+        require(identifiers.toSet().size == identifiers.size) { "All identifiers need to be unique" }
 
-        return deriveInterpolatingValue(
-            identifiers.map { it.toBigInteger() },
-            identifierInteger
-        )
-    }
-
-    private fun  deriveInterpolatingValue(identifiers: List<BigInteger>, xI: BigInteger): BigInteger {
-        var number: BigInteger = BigInteger.ONE
+        var number = BigInteger.ONE
         var deno = BigInteger.ONE
-        for (xJ in identifiers) {
-            if (xJ == xI) {
+
+        for (currentIdentifier in identifiers) {
+            if (currentIdentifier == signerIdentifier) {
                 continue
             }
-            number = number.times(xJ) ?: xJ
-            deno = deno.times(xJ - xI)
+            number = number.plus(currentIdentifier)
+            deno = currentIdentifier.minus(signerIdentifier).toBigInteger()
         }
-        return number.times(
-            deno.pow(CryptographicConstants.n.minus(2), CryptographicConstants.n)
-        ).mod(CryptographicConstants.n)
+        return number.divide(deno)
     }
 
     fun deriveGroupPublicKey(
         publicShares: List<PublicKey>,
-        identifiers: List<ByteVector32>
+        identifiers: List<Int>
     ): PublicKey {
         require(publicShares.size == identifiers.size)
 
-        var Q: Point? = null
+        var Q = GroupElement.INFINITY
+
         identifiers.zip(publicShares).forEach { (my_id, publicShare) ->
             val XI = try {
-                 Point.fromCompressedBytes(publicShare.value.toByteArray())
+                GroupElement.fromCompressedBytes(publicShare)
             } catch (e: Throwable) {
                 throw InvalidContributionException(
                     my_id.toBigInteger(),
@@ -213,15 +203,13 @@ object Frost {
             val multiple = XI.mul(lamI)
             Q = Q?.add(multiple) ?: multiple
         }
-        require(Q != null)
-        return PublicKey(
-            Q.cbytes()
-        )
+        require(!Q.isInfinity) { "Q cannot be at infinity" }
+        return Q.toCompressedBytes()
     }
 
     fun groupPublicKeyAndTweet(
         publicShares: List<PublicKey>,
-        ids: List<ByteVector32>,
+        ids: List<Int>,
         tweaks: List<ByteArray>,
         isXonlies: List<Boolean>
     ): FrostTweakContext {
@@ -249,18 +237,18 @@ object Frost {
 
     fun partialSignatureVerify(
         frostPartialSignature: FrostPartialSignature,
-        identifiers: List<ByteVector32>,
         frostPublicNonces: List<FrostPublicNonce>,
-        publicShares: List<PublicKey>,
+        frostSignersContext: FrostSignersContext,
         tweaks: List<ByteArray>,
         isXonlies: List<Boolean>,
         message: ByteArray,
         index: Int
     ): Boolean {
-        if (identifiers.size != frostPublicNonces.size) {
-            throw IllegalArgumentException("The ids, pubnonces and pubshares arrays must have the same length.")
-        }
-        if (publicShares.size != frostPublicNonces.size) {
+        logger.d("Signer Context: $frostSignersContext")
+        frostSignersContext.validateSignersContext()
+
+        return false
+        if (frostSignersContext.publicShares.size != frostPublicNonces.size) {
             throw IllegalArgumentException("The ids, pubnonces and pubshares arrays must have the same length.")
         }
         if (tweaks.size != isXonlies.size) {
@@ -269,17 +257,18 @@ object Frost {
 
         val aggNonce = nonceAgg(
             frostPublicNonces,
-            identifiers
         )
+        logger.d("AggNonce: ${aggNonce.toHexString()}")
         val frostSessionContext = FrostSessionContext(
-            aggNonce, identifiers, publicShares,  tweaks, isXonlies, message
+            frostSignersContext, aggNonce, tweaks, isXonlies, message
         )
+        logger.d("Frost Session Context: $frostSessionContext")
 
         return frostSessionContext.partialSignatureVerify(
             frostPartialSignature,
-            identifiers[index],
+            frostSignersContext.identifiers[index],
             frostPublicNonces[index],
-            publicShares[index],
+            frostSignersContext.publicShares[index],
         )
     }
 
@@ -295,9 +284,10 @@ object Frost {
 
     fun deterministicSign(
         secretShare: ByteArray,
-        my_id: ByteVector32,
+        my_id: Int,
         aggothernonce: FrostPublicNonce,
-        identifiers: List<ByteVector32>,
+        frostSignersContext: FrostSignersContext,
+        identifiers: List<Int>,
         publicShares: List<PublicKey>,
         tweaks: List<ByteArray>,
         isXonlies: List<Boolean>,
@@ -341,7 +331,7 @@ object Frost {
         require(R_s2 != null) { "deterministicSign R_s2 can't be null" }
 
         val frostPublicNonce = FrostPublicNonce(
-            R_s1.cbytes() + R_s2.cbytes()
+            R_s1.compressedBytes() + R_s2.compressedBytes()
         )
         val frostSecretNonce = FrostSecretNonce(
             k_1.toByteArray() + k_2.toByteArray()
@@ -350,13 +340,11 @@ object Frost {
         try {
             val aggregateNonce = nonceAgg(
                 listOf(frostPublicNonce, aggothernonce),
-                listOf(my_id)
             )
 
             val frostSessionContext = FrostSessionContext(
+                frostSignersContext = frostSignersContext,
                 aggregateNonce,
-                identifiers,
-                publicShares,
                 tweaks,
                 isXonlies,
                 message
@@ -395,7 +383,7 @@ object Frost {
         val P = Point.G.mul(d0)
         require(P != null)
         return PublicKey(
-            P.cbytes()
+            P.compressedBytes()
         )
 
     }
@@ -420,7 +408,7 @@ object Frost {
         maxParticipants: Int,
         minParticipants: Int,
         groupPublicKey: PublicKey,
-        identifiers: List<ByteArray>,
+        identifiers: List<Int>,
         secretShares: List<ByteArray>,
         publicShares: List<PublicKey>
     ): Boolean {
@@ -437,14 +425,14 @@ object Frost {
             throw IllegalArgumentException("public shares array needs to match maxPartcipants")
         }
 
-        val integerIdentifiers = identifiers.map { it.toBigInteger() }
+
 
         for (numberOfSigners in minParticipants..(maxParticipants+1)) {
-            val signerSets = integerIdentifiers.combinations(numberOfSigners)
+            val signerSets = identifiers.combinations(numberOfSigners)
             for (signerSet in signerSets) {
                 var groupSecretKey: BigInteger = BigInteger.ZERO
                 for (i in signerSet) {
-                    val secretShareI = secretShares[i.intValue(false)-1].toBigInteger()
+                    val secretShareI = secretShares[i-1].toBigInteger()
                     val lambdaI = deriveInterpolatingValue(signerSet, i)
                     groupSecretKey += lambdaI.times(secretShareI)
                 }

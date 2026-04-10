@@ -5,6 +5,7 @@ import com.ionspin.kotlin.bignum.integer.times
 import ac.cord.auxiliary.cryptography.CryptographicConstants.p
 import co.touchlab.kermit.Logger
 import fr.acinq.secp256k1.Hex
+import kotlin.math.log
 
 open class Point(
     private val x: BigInteger,
@@ -20,10 +21,12 @@ open class Point(
         )
 
         fun fromCompressedBytes(x: ByteArray): Point {
+            logger.d("share: ${x.toHexString()}")
             if (x.size != 33) {
                 throw IllegalArgumentException("x is not a valid compressed point.")
             }
             val slice = x.sliceArray(1..32)
+            logger.d("slice: ${slice.toHexString()}")
             val point = slice.liftX() ?: throw IllegalArgumentException("x is not a valid compressed point")
 
             return if (x[0] == 2.toByte()) {
@@ -106,7 +109,7 @@ open class Point(
         return getX().toByteArray()
     }
 
-    fun cbytes(): ByteArray {
+    fun compressedBytes(): ByteArray {
         val a = if (hasEvenY()) {
             byteArrayOf(0x02)
         } else {
@@ -116,11 +119,11 @@ open class Point(
         return a + xbytes()
     }
 
-    fun cbytesExt(): ByteArray {
+    fun compressedBytesExt(): ByteArray {
         if (isInfinite) {
             BigInteger.ZERO.toByteArray()
         }
-        return cbytes()
+        return compressedBytes()
     }
 
     fun negate(): Point {

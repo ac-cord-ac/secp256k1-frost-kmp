@@ -3,17 +3,18 @@ package ac.cord.auxiliary.frost
 import ac.cord.auxiliary.cryptography.CryptographicConstants
 import ac.cord.auxiliary.cryptography.Point
 import ac.cord.auxiliary.cryptography.requireWithinCurveOrderRange
+import ac.cord.auxiliary.cryptography.to32LengthByteArray
 import ac.cord.auxiliary.cryptography.toBigInteger
 import ac.cord.auxiliary.exceptions.InvalidContributionException
 import co.touchlab.kermit.Logger
 import com.ionspin.kotlin.bignum.integer.BigInteger
+import com.ionspin.kotlin.bignum.integer.toBigInteger
 import fr.acinq.bitcoin.ByteVector32
 import fr.acinq.bitcoin.PublicKey
 
 data class FrostSessionContext(
+    val frostSignersContext: FrostSignersContext,
     val aggNonce: ByteArray,
-    val identifiers: List<ByteVector32>,
-    val publicShares: List<PublicKey>,
     val tweaks: List<ByteArray>,
     val isXonlies: List<Boolean>,
     val message: ByteArray
@@ -27,8 +28,6 @@ data class FrostSessionContext(
         other as FrostSessionContext
 
         if (!aggNonce.contentEquals(other.aggNonce)) return false
-        if (identifiers != other.identifiers) return false
-        if (publicShares != other.publicShares) return false
         if (tweaks != other.tweaks) return false
         if (isXonlies != other.isXonlies) return false
         if (!message.contentEquals(other.message)) return false
@@ -38,8 +37,6 @@ data class FrostSessionContext(
 
     override fun hashCode(): Int {
         var result = aggNonce.contentHashCode()
-        result = 31 * result + identifiers.hashCode()
-        result = 31 * result + publicShares.hashCode()
         result = 31 * result + tweaks.hashCode()
         result = 31 * result + isXonlies.hashCode()
         result = 31 * result + message.contentHashCode()
@@ -47,13 +44,16 @@ data class FrostSessionContext(
     }
 
     fun getSessionValues(): SessionValues {
-        val tweakContext = Frost.groupPublicKeyAndTweet(publicShares, identifiers, tweaks, isXonlies)
+        val tweakContext = Frost.groupPublicKeyAndTweet(frostSignersContext.publicShares, frostSignersContext.identifiers, tweaks, isXonlies)
 
-        val sortedIdentifiers = identifiers.sortedBy { it.toByteArray().toHexString() }
-        val concat_ids = sortedIdentifiers.map { it.toByteArray() }.flatMap { it.asIterable() }.toByteArray()
+        val sortedIdentifiers = frostSignersContext.identifiers.map {
+            ByteVector32(it.toBigInteger().to32LengthByteArray())
+        }.sortedBy { it.toByteArray().toHexString() }
+        val concatIds = sortedIdentifiers.map { it.toByteArray() }.flatMap { it.asIterable() }.toByteArray()
 
-        val b = Frost.taggedHash("FROST/noncecoef", concat_ids + aggNonce + tweakContext.Q.xbytes() + message).toBigInteger().mod(
+        val b = Frost.taggedHash("FROST/noncecoef", concatIds + aggNonce + tweakContext.Q.xbytes() + message).toBigInteger().mod(
             CryptographicConstants.n)
+
 
         try {
             val R_1 = Point.fromCompressedBytesExt(
@@ -67,7 +67,7 @@ data class FrostSessionContext(
             val R_ = R_1?.add(b_multiplied) ?: b_multiplied
             val R = R_ ?: Point.G
 
-            val e = Frost.taggedHash("BIP0340/challenge", R.xbytes() + tweakContext.Q.xbytes() + message).toBigInteger().mod(CryptographicConstants.n)
+            val e = Frost.taggedHash("BIP0340/challenge", R.xbytes() + tweakContext.Q.xbytes() + message).toBigInteger()
 
             return SessionValues(
                 frostTweakContext = tweakContext,
@@ -84,21 +84,18 @@ data class FrostSessionContext(
         }
     }
 
-    fun getSessionInterpolatingValue(signerIdentifier: ByteVector32): BigInteger {
+    fun getSessionInterpolatingValue(signerIdentifier: Int): BigInteger {
         return Frost.deriveInterpolatingValue(
-            identifiers,
+            frostSignersContext.identifiers,
             signerIdentifier
         )
     }
 
     fun sessionHasSignerPublicShare(publicShare: PublicKey): Boolean {
-
-        return publicShares.contains(publicShare)
+        return frostSignersContext.publicShares.contains(publicShare)
     }
 
-    fun sign(frostSecretNonce: FrostSecretNonce, secretShare: ByteArray, my_id: ByteVector32): FrostPartialSignature {
-        my_id.toBigInteger().requireWithinCurveOrderRange()
-
+    fun sign(frostSecretNonce: FrostSecretNonce, secretShare: ByteArray, my_id: Int): FrostPartialSignature {
         val sessionValues = getSessionValues()
 
         val k1_ = frostSecretNonce.getSecretNonce().sliceArray(0..31).toBigInteger()
@@ -112,12 +109,12 @@ data class FrostSessionContext(
         val k1 = if (sessionValues.R.hasEvenY()) {
             k1_
         } else {
-            CryptographicConstants.n.minus(k1_)
+            k1_.negate()
         }
         val k2 = if (sessionValues.R.hasEvenY()) {
             k2_
         } else {
-            CryptographicConstants.n.minus(k2_)
+            k2_.negate()
         }
 
         val d_ = secretShare.toBigInteger()
@@ -126,21 +123,23 @@ data class FrostSessionContext(
         val P = Point.G.mul(d_)
 
 
-        require(P != null) { "P is null" }
+        require(P != null) { "P should not be at infinity" }
 
         val publicShare = PublicKey(
-            P.cbytes()
+            P.compressedBytes()
         )
 
         if (!sessionHasSignerPublicShare(publicShare)) {
             throw IllegalArgumentException("The signer's pubshare must be included in the list of pubshares.")
         }
 
+        // TODO: Signer id check in identifiers...
+
         val a = getSessionInterpolatingValue(my_id)
         val g = if (sessionValues.frostTweakContext.Q.hasEvenY()) {
             BigInteger.ONE
         } else {
-            CryptographicConstants.n.minus(1)
+            BigInteger.ONE.negate()
         }
 
         val d = g.multiply(sessionValues.frostTweakContext.gacc).times(d_).mod(CryptographicConstants.n)
@@ -151,8 +150,6 @@ data class FrostSessionContext(
             bk2
         ).plus(
             ead
-        ).mod(
-            CryptographicConstants.n
         )
         val frostPartialSignature = FrostPartialSignature(
             ByteVector32(
@@ -166,7 +163,7 @@ data class FrostSessionContext(
         require(R_s1 != null) { "sign R_s1 can't be null" }
         require(R_s2 != null) { "sign R_s2 can't be null" }
 
-        val frostPublicNonce = FrostPublicNonce(R_s1.cbytes() + R_s2.cbytes())
+        val frostPublicNonce = FrostPublicNonce(R_s1.compressedBytes() + R_s2.compressedBytes())
 
         require(
             partialSignatureVerify(
@@ -185,7 +182,7 @@ data class FrostSessionContext(
 
     fun partialSignatureVerify(
         frostPartialSignature: FrostPartialSignature,
-        my_id: ByteVector32,
+        my_id: Int,
         frostPublicNonce: FrostPublicNonce,
         publicShare: PublicKey
     ): Boolean {
@@ -198,7 +195,12 @@ data class FrostSessionContext(
         }
 
         if (!sessionHasSignerPublicShare(publicShare)) {
-            throw IllegalArgumentException("The signer's pubshare must be included in the list of pubshares.")
+            return false
+        }
+
+        if (!frostSignersContext.identifiers.contains(my_id)) {
+            logger.e("$my_id not in ${frostSignersContext.identifiers}")
+            return false
         }
 
         val R_s1 = Point.fromCompressedBytes(
@@ -221,17 +223,17 @@ data class FrostSessionContext(
         val g = if (sessionValues.frostTweakContext.Q.hasEvenY()) {
             BigInteger.ONE
         } else {
-            CryptographicConstants.n - BigInteger.ONE
+            BigInteger.ONE.negate()
         }
-        val g_ = g.times(sessionValues.frostTweakContext.gacc).mod(CryptographicConstants.n)
+        val g_ = g.times(sessionValues.frostTweakContext.gacc)
 
-        val multiple = P.mul(sessionValues.e.times(a).times(g_).mod(CryptographicConstants.n))
+        val multiple = P.mul(sessionValues.e.times(a).times(g_))
         return Point.G.mul(s) == (Re_s?.add(multiple) ?: multiple)
     }
 
     fun partialSignatureAggregate(
         partialSignatures: List<ByteArray>,
-        identifiers: List<ByteVector32>,
+        identifiers: List<Int>,
     ): ByteArray {
         if (partialSignatures.size != identifiers.size) {
             throw IllegalArgumentException("The psigs and ids arrays must have the same length.")

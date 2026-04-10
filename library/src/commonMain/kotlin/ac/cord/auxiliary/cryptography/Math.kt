@@ -3,6 +3,7 @@ package ac.cord.auxiliary.cryptography
 import com.ionspin.kotlin.bignum.integer.BigInteger
 import com.ionspin.kotlin.bignum.integer.toBigInteger
 import ac.cord.auxiliary.cryptography.CryptographicConstants.p
+import co.touchlab.kermit.Logger
 import com.ionspin.kotlin.bignum.integer.Sign
 import fr.acinq.bitcoin.ByteVector32
 import kotlin.experimental.xor
@@ -36,7 +37,9 @@ fun ByteArray.toBigInteger(sign: Sign = Sign.POSITIVE): BigInteger {
 }
 
 fun ByteArray.liftX(): Point? {
-    return toBigInteger().liftX()
+    val v = toBigInteger()
+    Logger.withTag("Math").d("v: $v")
+    return v.liftX()
 }
 
 fun BigInteger.to32LengthByteArray(): ByteArray {
@@ -62,19 +65,17 @@ fun BigInteger.liftX(): Point? {
         return null
     }
 
-    val ySq = x.pow(3.toBigInteger(), p).plus(7).mod(p)
-    val y = ySq.pow(p.plus(1).floorDiv(4.toBigInteger()), p)
+    Logger.withTag("Math").d("x: $x")
+    val y = x.pow(3.toBigInteger()).plus(7).sqrt()
 
-    if (y.pow(BigInteger.TWO, p) != ySq) {
-        return null
-    }
 
+    Logger.withTag("Math").d("y: $y")
     return Point(
         x = x,
         y = if (y and BigInteger.ONE == BigInteger.ZERO) {
             y
         } else {
-            p.minus(y)
+            y.negate()
         }
     )
 }
