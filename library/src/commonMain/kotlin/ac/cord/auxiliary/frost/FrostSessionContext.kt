@@ -54,17 +54,14 @@ data class FrostSessionContext(
         val sortedIdentifiers = frostSignersContext.identifiers.map {
             it.to4LengthByteArray()
         }.sortedBy { it.toHexString() }
-        logger.d("sortedIdentifiers: $sortedIdentifiers" )
 
         val concatIds = sortedIdentifiers.flatMap { it.asIterable() }.toByteArray()
 
-        logger.d("contactId: ${concatIds.toHexString()}")
         val temp = concatIds + aggNonce + tweakContext.Q.toXonlyPublicKey().value.toByteArray() + message
-        logger.d("Temp: ${temp.toHexString()}")
+
         val b = Scalar.fromBytesNonZeroChecked(
             Frost.taggedHash("FROST/noncecoef", temp)
         )
-        logger.d("b: $b")
         try {
             val R_1 = GroupElement.fromCompressedBytesWithInfinity(
                 PublicKey(
@@ -80,20 +77,17 @@ data class FrostSessionContext(
             val R_ = R_1.add(
                 R_2.mul(b.toBigInteger())
             )
-            logger.d("R_: $R_")
             val R = if (R_.isInfinity) {
                 GroupElement.GENERATOR_POINT
             } else {
                 R_
             }
-            logger.d("R: $R")
             val e = Scalar.fromBytesNonZeroChecked(
                 Frost.taggedHash(
                     "BIP0340/challenge",
                     R.toXonlyPublicKey().value.toByteArray() + tweakContext.Q.toXonlyPublicKey().value.toByteArray() + message
                 )
             )
-            logger.d("e: $e")
 
             return SessionValues(
                 frostTweakContext = tweakContext,
@@ -216,14 +210,12 @@ data class FrostSessionContext(
         frostPublicNonce: FrostPublicNonce,
         publicShare: PublicKey
     ): Boolean {
-        logger.d("partial_sig_verify_internal: ${frostPartialSignature.value}")
         val sessionValues = getSessionValues()
 
         val s = Scalar.fromBytesNonZeroChecked(
             frostPartialSignature.value.toByteArray()
         )
 
-        logger.d("s: $s")
 
         if (!sessionHasSignerPublicShare(publicShare)) {
             logger.e("publicShare not in shares")
@@ -240,44 +232,35 @@ data class FrostSessionContext(
                 frostPublicNonce.value.sliceArray(0..32)
             )
         )
-        logger.d("R1_partial: $R_s1")
         val R_s2 = GroupElement.fromCompressedBytes(
             PublicKey(
                 frostPublicNonce.value.sliceArray(33..65)
             )
         )
-        logger.d("R2_partial: $R_s2")
 
         val Re_s_ = R_s1.add(R_s2.mul(sessionValues.b.toBigInteger()))
-        logger.d("Re_S_: $Re_s_")
         val Re_s = if (sessionValues.R.hasEvenY()) {
             Re_s_
         } else {
             Re_s_.negate()
         }
-        logger.d("Re_s: $Re_s")
 
         val P = try {
             GroupElement.fromCompressedBytes(publicShare)
         } catch (e: Throwable) {
-            logger.d("Failed to get P: ", e)
+            logger.e("Failed to get P: ", e)
             return false
         }
-        logger.d("P: $P")
 
         val a = getSessionInterpolatingValue(my_id)
-        logger.d("a: $a")
         val g = if (sessionValues.frostTweakContext.Q.hasEvenY()) {
             Scalar(BigInteger.ONE)
         } else {
             Scalar(BigInteger.ONE.negate())
         }
-        logger.d("g: $g")
         val g_ = g.times(sessionValues.frostTweakContext.gacc)
-        logger.d("g_: $g_")
 
         val multiple = P.mul(sessionValues.e.times(a).times(g_).toBigInteger())
-        logger.d("multiple: $multiple")
 
         return GroupElement.GENERATOR_POINT.mul(s.toBigInteger()).toUncompressedBytes()
             .contentEquals(

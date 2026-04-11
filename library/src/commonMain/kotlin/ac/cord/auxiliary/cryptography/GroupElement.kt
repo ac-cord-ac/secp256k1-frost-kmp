@@ -65,8 +65,8 @@ data class GroupElement(
                 throw IllegalArgumentException("First byte of the compressedBytes is not what is expected")
             }
             val slice = compressedBytes.value.toByteArray().sliceArray(1..32)
-
             val x = FieldElement.fromBytesChecked(slice)
+
             val r = liftX(x)
             return if (compressedBytes.value[0] == 3.toByte()) {
                 r.negate()
@@ -76,7 +76,7 @@ data class GroupElement(
         }
 
         fun fromCompressedBytesWithInfinity(compressedBytes: PublicKey): GroupElement {
-            return if (compressedBytes.value.toByteArray().contentEquals(ByteArray(32))) {
+            return if (compressedBytes.value.toByteArray().contentEquals(ByteArray(33))) { // TODO: Find a better way to do this...
                 INFINITY
             } else {
                 fromCompressedBytes(compressedBytes)
@@ -135,9 +135,9 @@ data class GroupElement(
             return this
         }
 
-        val lam: FieldElement? = if (this.x == other.x) {
+        val lam: FieldElement? = if (this.x.toBigInteger() ==  other.x.toBigInteger()) {
             if (this.y != other.y) {
-                require(this.y.plus(other.y) == BigInteger.ZERO) { "A point added to its own negation is infinity." }
+                require(this.y.plus(other.y).toBigInteger() == BigInteger.ZERO) { "A point added to its own negation is infinity." }
 
                 return INFINITY
             } else {

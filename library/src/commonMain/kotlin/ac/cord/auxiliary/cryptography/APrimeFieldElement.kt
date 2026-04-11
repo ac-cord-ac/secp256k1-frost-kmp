@@ -11,7 +11,6 @@ abstract class APrimeFieldElement<T>(
     init {
         require(denominator != BigInteger.ZERO) { "Denominator cannot be ZERO" }
         if (numerator == BigInteger.ZERO) {
-            Logger.withTag("APrimeFieldElement").e("Numerator Zero: $this")
             denominator = BigInteger.ONE
         }
     }

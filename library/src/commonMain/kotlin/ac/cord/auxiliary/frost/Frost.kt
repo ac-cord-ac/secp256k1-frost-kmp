@@ -124,24 +124,27 @@ object Frost {
     fun nonceAgg(
         frostPublicNonces: List<FrostPublicNonce>
     ): ByteArray {
+
         val aggNonce = mutableListOf<ByteArray>()
 
         for (j in 1..2) {
             var R_j = GroupElement.INFINITY
             frostPublicNonces.forEachIndexed { index, publicNonce ->
-                try {
+                val R_ij = try {
                     val startingIndex =  (j-1)*33
                     val endingIndex = j*32 + (j-1)
 
-                    val R_ij = GroupElement.fromCompressedBytes(
-                        PublicKey(
-                            publicNonce.value.sliceArray(startingIndex..endingIndex)
-                        )
+                    val pubkey = PublicKey(
+                        publicNonce.value.sliceArray(startingIndex..endingIndex)
                     )
-                    R_j = R_j.add(R_ij)
+                    GroupElement.fromCompressedBytes(
+                        pubkey
+                    )
                 }  catch (e: Throwable) {
                     throw InvalidContributionException(index.toBigInteger(), "pubnonce", e)
                 }
+
+                R_j = R_j.add(R_ij)
             }
             if (R_j.isInfinity) { // It's infinity...
                 aggNonce.add(
@@ -373,15 +376,11 @@ object Frost {
     fun individualPublicKey(
         secretKey: ByteArray
     ): PublicKey {
-        logger.d("secretKey: ${secretKey.toHexString()}")
         val d0 = secretKey.toBigInteger()
-        logger.d("d0: $d0")
         if (d0 !in BigInteger.ONE..<GroupElement.ORDER) {
             throw IllegalArgumentException("The secret key must be an integer in the range 1..n-1.")
         }
-        logger.d("G: ${GroupElement.GENERATOR_POINT}")
         val P = GroupElement.GENERATOR_POINT.mul(d0)
-        logger.d("P: $P")
         require(!P.isInfinity) {"P cannot be infinity"}
         return P.toCompressedBytes()
 
