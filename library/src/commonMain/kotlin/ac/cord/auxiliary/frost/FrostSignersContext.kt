@@ -1,7 +1,6 @@
 package ac.cord.auxiliary.frost
 
 import ac.cord.auxiliary.cryptography.GroupElement
-import ac.cord.auxiliary.cryptography.Point
 import ac.cord.auxiliary.cryptography.toBigInteger
 import ac.cord.auxiliary.exceptions.InvalidContributionException
 import co.touchlab.kermit.Logger
@@ -42,6 +41,7 @@ data class FrostSignersContext(
         if (identifiers.toSet().size != identifiers.size) {
             throw IllegalArgumentException("The participant identifier list contains duplicate elements.")
         }
+
         if (deriveThresholdPublicKey() != groupPublicKey) {
             throw IllegalArgumentException("The provided key material ($groupPublicKey) is incorrect ${deriveThresholdPublicKey()}.")
         }
@@ -56,14 +56,12 @@ data class FrostSignersContext(
             } catch (e: Throwable) {
                 throw InvalidContributionException(index.toBigInteger(), "pubshare", e)
             }
-            logger.d("X_i: $X_i")
             val lam_i = Frost.deriveInterpolatingValue(
                 identifiers,
                 identifier
             )
-            logger.d("lamI: $lam_i")
-            Q = X_i.mul(lam_i)?.add(Q) ?: Q
-            logger.d("Q: $Q")
+            val multiple = X_i.mul(lam_i.toBigInteger())
+            Q = Q.add(multiple)
         }
 
         require(!Q.isInfinity) {"Q should not be at infinity"}

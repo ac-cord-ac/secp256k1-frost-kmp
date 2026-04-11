@@ -36,12 +36,6 @@ fun ByteArray.toBigInteger(sign: Sign = Sign.POSITIVE): BigInteger {
     return BigInteger.fromByteArray(this, sign)
 }
 
-fun ByteArray.liftX(): Point? {
-    val v = toBigInteger()
-    Logger.withTag("Math").d("v: $v")
-    return v.liftX()
-}
-
 fun BigInteger.to32LengthByteArray(): ByteArray {
     return toByteArray().toHexString().padStart(64, '0').hexToByteArray()
 }
@@ -56,28 +50,6 @@ fun Int.to4LengthByteArray(): ByteArray {
 
 fun Int.toSingleByteByteArray(): ByteArray {
     return byteArrayOf(toByte())
-}
-
-fun BigInteger.liftX(): Point? {
-    val x = this
-
-    if (x > p) {
-        return null
-    }
-
-    Logger.withTag("Math").d("x: $x")
-    val y = x.pow(3.toBigInteger()).plus(7).sqrt()
-
-
-    Logger.withTag("Math").d("y: $y")
-    return Point(
-        x = x,
-        y = if (y and BigInteger.ONE == BigInteger.ZERO) {
-            y
-        } else {
-            y.negate()
-        }
-    )
 }
 
 fun ByteArray.xor(other: ByteArray): ByteArray {

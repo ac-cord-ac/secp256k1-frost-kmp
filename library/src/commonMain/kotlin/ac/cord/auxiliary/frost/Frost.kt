@@ -2,8 +2,7 @@ package ac.cord.auxiliary.frost
 
 import ac.cord.auxiliary.cryptography.CryptographicConstants
 import ac.cord.auxiliary.cryptography.GroupElement
-import ac.cord.auxiliary.cryptography.Point
-import ac.cord.auxiliary.cryptography.pow
+import ac.cord.auxiliary.cryptography.Scalar
 import ac.cord.auxiliary.cryptography.to4LengthByteArray
 import ac.cord.auxiliary.cryptography.to8LengthByteArray
 import ac.cord.auxiliary.cryptography.toBigInteger
@@ -86,14 +85,14 @@ object Frost {
         require(k1 != BigInteger.ZERO)
         require(k2 != BigInteger.ZERO)
 
-        val Rs1 = Point.G.mul(k1)
-        val Rs2 = Point.G.mul(k2)
+        val Rs1 = GroupElement.GENERATOR_POINT.mul(k1)
+        val Rs2 = GroupElement.GENERATOR_POINT.mul(k2)
 
-        require(Rs1 != null)
-        require(Rs2 != null)
+        require(!Rs1.isInfinity) { "Rs1 can't be infinity" }
+        require(!Rs2.isInfinity) { "Rs2 can't be infinity" }
 
         val frostPublicNonce = FrostPublicNonce(
-            Rs1.compressedBytes() + Rs2.compressedBytes()
+            Rs1.toCompressedBytes().value.toByteArray() + Rs2.toCompressedBytes().value.toByteArray()
         )
         val frostSecretNonce = FrostSecretNonce(
             k1.toByteArray() + k2.toByteArray()
@@ -139,7 +138,7 @@ object Frost {
                             publicNonce.value.sliceArray(startingIndex..endingIndex)
                         )
                     )
-                    R_j = R_ij.add(R_j)
+                    R_j = R_j.add(R_ij)
                 }  catch (e: Throwable) {
                     throw InvalidContributionException(index.toBigInteger(), "pubnonce", e)
                 }
@@ -158,23 +157,24 @@ object Frost {
         return aggNonce.flatMap { it.asIterable() }.toByteArray()
     }
 
-    fun  deriveInterpolatingValue(identifiers: List<Int>, signerIdentifier: Int): BigInteger {
+    fun  deriveInterpolatingValue(identifiers: List<Int>, signerIdentifier: Int): Scalar {
         require(identifiers.contains(signerIdentifier)) { "Signer identifier needs to be among identifiers" }
 
         require(signerIdentifier.toBigInteger() in BigInteger.ZERO..BigInteger.TWO.pow(32)) { "Signer identifier needs to be within supported range" }
         require(identifiers.toSet().size == identifiers.size) { "All identifiers need to be unique" }
 
-        var number = BigInteger.ONE
-        var deno = BigInteger.ONE
+        var numerator = Scalar(BigInteger.ONE)
+        var denominator = Scalar(BigInteger.ONE)
 
         for (currentIdentifier in identifiers) {
             if (currentIdentifier == signerIdentifier) {
                 continue
             }
-            number = number.plus(currentIdentifier)
-            deno = currentIdentifier.minus(signerIdentifier).toBigInteger()
+            numerator = numerator.times(BigInteger.ONE.plus(currentIdentifier))
+            denominator = denominator.times(currentIdentifier.minus(signerIdentifier).toBigInteger())
         }
-        return number.divide(deno)
+
+        return numerator.divide(denominator)
     }
 
     fun deriveGroupPublicKey(
@@ -200,8 +200,10 @@ object Frost {
                 identifiers,
                 my_id
             )
-            val multiple = XI.mul(lamI)
-            Q = Q?.add(multiple) ?: multiple
+
+
+            val multiple = XI.mul(lamI.toBigInteger())
+            Q = Q.add(multiple)
         }
         require(!Q.isInfinity) { "Q cannot be at infinity" }
         return Q.toCompressedBytes()
@@ -244,10 +246,8 @@ object Frost {
         message: ByteArray,
         index: Int
     ): Boolean {
-        logger.d("Signer Context: $frostSignersContext")
         frostSignersContext.validateSignersContext()
 
-        return false
         if (frostSignersContext.publicShares.size != frostPublicNonces.size) {
             throw IllegalArgumentException("The ids, pubnonces and pubshares arrays must have the same length.")
         }
@@ -258,12 +258,9 @@ object Frost {
         val aggNonce = nonceAgg(
             frostPublicNonces,
         )
-        logger.d("AggNonce: ${aggNonce.toHexString()}")
         val frostSessionContext = FrostSessionContext(
             frostSignersContext, aggNonce, tweaks, isXonlies, message
         )
-        logger.d("Frost Session Context: $frostSessionContext")
-
         return frostSessionContext.partialSignatureVerify(
             frostPartialSignature,
             frostSignersContext.identifiers[index],
@@ -324,14 +321,14 @@ object Frost {
             secShare_, aggothernonce.value, tweakedGroupPublicKey, message, 1
         ).mod(CryptographicConstants.n)
 
-        val R_s1 = Point.G.mul(k_1)
-        val R_s2 = Point.G.mul(k_2)
+        val R_s1 = GroupElement.GENERATOR_POINT.mul(k_1)
+        val R_s2 = GroupElement.GENERATOR_POINT.mul(k_2)
 
         require(R_s1 != null) { "deterministicSign R_s1 can't be null" }
         require(R_s2 != null) { "deterministicSign R_s2 can't be null" }
 
         val frostPublicNonce = FrostPublicNonce(
-            R_s1.compressedBytes() + R_s2.compressedBytes()
+            R_s1.toCompressedBytes().value.toByteArray() + R_s2.toCompressedBytes().value.toByteArray()
         )
         val frostSecretNonce = FrostSecretNonce(
             k_1.toByteArray() + k_2.toByteArray()
@@ -376,15 +373,17 @@ object Frost {
     fun individualPublicKey(
         secretKey: ByteArray
     ): PublicKey {
+        logger.d("secretKey: ${secretKey.toHexString()}")
         val d0 = secretKey.toBigInteger()
-        if (d0 <= BigInteger.ZERO || d0 >= CryptographicConstants.n) {
+        logger.d("d0: $d0")
+        if (d0 !in BigInteger.ONE..<GroupElement.ORDER) {
             throw IllegalArgumentException("The secret key must be an integer in the range 1..n-1.")
         }
-        val P = Point.G.mul(d0)
-        require(P != null)
-        return PublicKey(
-            P.compressedBytes()
-        )
+        logger.d("G: ${GroupElement.GENERATOR_POINT}")
+        val P = GroupElement.GENERATOR_POINT.mul(d0)
+        logger.d("P: $P")
+        require(!P.isInfinity) {"P cannot be infinity"}
+        return P.toCompressedBytes()
 
     }
 
@@ -434,7 +433,7 @@ object Frost {
                 for (i in signerSet) {
                     val secretShareI = secretShares[i-1].toBigInteger()
                     val lambdaI = deriveInterpolatingValue(signerSet, i)
-                    groupSecretKey += lambdaI.times(secretShareI)
+                    groupSecretKey += lambdaI.times(secretShareI).toBigInteger()
                 }
                 val groupSecretKeyBytes = groupSecretKey.mod(CryptographicConstants.n).toByteArray()
                 val computedGroupPublicKey = individualPublicKey(groupSecretKeyBytes)

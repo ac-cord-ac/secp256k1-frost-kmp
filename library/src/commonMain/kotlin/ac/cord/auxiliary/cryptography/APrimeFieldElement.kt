@@ -1,18 +1,21 @@
 package ac.cord.auxiliary.cryptography
 
+import co.touchlab.kermit.Logger
 import com.ionspin.kotlin.bignum.integer.BigInteger
 
-open class APrimeFieldElement(
+abstract class APrimeFieldElement<T>(
     var numerator: BigInteger,
     var denominator: BigInteger,
-    val size: BigInteger
+    val size: BigInteger,
 ) {
     init {
         require(denominator != BigInteger.ZERO) { "Denominator cannot be ZERO" }
         if (numerator == BigInteger.ZERO) {
+            Logger.withTag("APrimeFieldElement").e("Numerator Zero: $this")
             denominator = BigInteger.ONE
         }
     }
+
     fun toBigInteger(): BigInteger {
         if (this.denominator != BigInteger.ONE) {
             this.numerator = this.numerator.times(this.denominator.pow(BigInteger.ONE.negate(), this.size)).mod(this.size)
@@ -22,40 +25,30 @@ open class APrimeFieldElement(
         return this.numerator
     }
 
-    fun plus(other: APrimeFieldElement): APrimeFieldElement {
-        return APrimeFieldElement(
-            numerator = this.numerator.times(other.denominator) + this.denominator.times(other.numerator),
-            denominator = this.denominator.times(other.denominator),
-            size = this.size
-        )
-    }
+    abstract fun plus(other: T): T
 
-    fun plus(other: BigInteger): APrimeFieldElement {
-        return APrimeFieldElement(
-            numerator = this.numerator + this.denominator.times(other),
-            denominator = this.denominator,
-            size = this.size
-        )
-    }
+    abstract fun plus(other: BigInteger): T
 
-    fun pow(other: BigInteger): APrimeFieldElement {
-        return APrimeFieldElement(
-            numerator = this.numerator.pow(other, this.size),
-            denominator = this.denominator.pow(other, this.size),
-            size = this.size
-        )
-    }
 
-    fun negate(): APrimeFieldElement {
-        return APrimeFieldElement(
-            numerator = this.numerator.negate(),
-            denominator = this.denominator,
-            size = this.size
-        )
-    }
+    abstract fun minus(other: T): T
+
+    abstract fun minus(other: BigInteger): T
+
+    abstract fun times(other: T): T
+
+    abstract fun times(other: BigInteger): T
+
+    abstract fun divide(other: T): T
+
+    abstract fun divide(other: BigInteger): T
+
+
+    abstract fun pow(other: BigInteger): T
+
+    abstract fun negate(): T
 
     fun isEven(): Boolean {
-        return toBigInteger() and BigInteger.ONE == BigInteger.ONE
+        return toBigInteger() and BigInteger.ONE == BigInteger.ZERO
     }
 
     fun toByteArray(): ByteArray {
@@ -65,5 +58,4 @@ open class APrimeFieldElement(
     override fun toString(): String {
         return toByteArray().toHexString()
     }
-
 }

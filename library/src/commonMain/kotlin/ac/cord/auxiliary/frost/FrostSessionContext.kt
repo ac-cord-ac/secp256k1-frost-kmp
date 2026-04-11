@@ -1,9 +1,11 @@
 package ac.cord.auxiliary.frost
 
 import ac.cord.auxiliary.cryptography.CryptographicConstants
-import ac.cord.auxiliary.cryptography.Point
+import ac.cord.auxiliary.cryptography.GroupElement
+import ac.cord.auxiliary.cryptography.Scalar
 import ac.cord.auxiliary.cryptography.requireWithinCurveOrderRange
 import ac.cord.auxiliary.cryptography.to32LengthByteArray
+import ac.cord.auxiliary.cryptography.to4LengthByteArray
 import ac.cord.auxiliary.cryptography.toBigInteger
 import ac.cord.auxiliary.exceptions.InvalidContributionException
 import co.touchlab.kermit.Logger
@@ -44,30 +46,54 @@ data class FrostSessionContext(
     }
 
     fun getSessionValues(): SessionValues {
+        frostSignersContext.validateSignersContext()
+
         val tweakContext = Frost.groupPublicKeyAndTweet(frostSignersContext.publicShares, frostSignersContext.identifiers, tweaks, isXonlies)
 
+
         val sortedIdentifiers = frostSignersContext.identifiers.map {
-            ByteVector32(it.toBigInteger().to32LengthByteArray())
-        }.sortedBy { it.toByteArray().toHexString() }
-        val concatIds = sortedIdentifiers.map { it.toByteArray() }.flatMap { it.asIterable() }.toByteArray()
+            it.to4LengthByteArray()
+        }.sortedBy { it.toHexString() }
+        logger.d("sortedIdentifiers: $sortedIdentifiers" )
 
-        val b = Frost.taggedHash("FROST/noncecoef", concatIds + aggNonce + tweakContext.Q.xbytes() + message).toBigInteger().mod(
-            CryptographicConstants.n)
+        val concatIds = sortedIdentifiers.flatMap { it.asIterable() }.toByteArray()
 
-
+        logger.d("contactId: ${concatIds.toHexString()}")
+        val temp = concatIds + aggNonce + tweakContext.Q.toXonlyPublicKey().value.toByteArray() + message
+        logger.d("Temp: ${temp.toHexString()}")
+        val b = Scalar.fromBytesNonZeroChecked(
+            Frost.taggedHash("FROST/noncecoef", temp)
+        )
+        logger.d("b: $b")
         try {
-            val R_1 = Point.fromCompressedBytesExt(
-                aggNonce.sliceArray(0..32)
+            val R_1 = GroupElement.fromCompressedBytesWithInfinity(
+                PublicKey(
+                    aggNonce.sliceArray(0..32)
+                )
             )
-            val R_2 = Point.fromCompressedBytesExt(
-                aggNonce.sliceArray(33..65)
+            val R_2 = GroupElement.fromCompressedBytesWithInfinity(
+                PublicKey(
+                    aggNonce.sliceArray(33..65)
+                )
             )
 
-            val b_multiplied = R_2?.mul(b)
-            val R_ = R_1?.add(b_multiplied) ?: b_multiplied
-            val R = R_ ?: Point.G
-
-            val e = Frost.taggedHash("BIP0340/challenge", R.xbytes() + tweakContext.Q.xbytes() + message).toBigInteger()
+            val R_ = R_1.add(
+                R_2.mul(b.toBigInteger())
+            )
+            logger.d("R_: $R_")
+            val R = if (R_.isInfinity) {
+                GroupElement.GENERATOR_POINT
+            } else {
+                R_
+            }
+            logger.d("R: $R")
+            val e = Scalar.fromBytesNonZeroChecked(
+                Frost.taggedHash(
+                    "BIP0340/challenge",
+                    R.toXonlyPublicKey().value.toByteArray() + tweakContext.Q.toXonlyPublicKey().value.toByteArray() + message
+                )
+            )
+            logger.d("e: $e")
 
             return SessionValues(
                 frostTweakContext = tweakContext,
@@ -88,7 +114,7 @@ data class FrostSessionContext(
         return Frost.deriveInterpolatingValue(
             frostSignersContext.identifiers,
             signerIdentifier
-        )
+        ).toBigInteger()
     }
 
     fun sessionHasSignerPublicShare(publicShare: PublicKey): Boolean {
@@ -120,14 +146,12 @@ data class FrostSessionContext(
         val d_ = secretShare.toBigInteger()
         d_.requireWithinCurveOrderRange()
 
-        val P = Point.G.mul(d_)
+        val P = GroupElement.GENERATOR_POINT.mul(d_)
 
 
-        require(P != null) { "P should not be at infinity" }
+        require(!P.isInfinity) { "P should not be at infinity" }
 
-        val publicShare = PublicKey(
-            P.compressedBytes()
-        )
+        val publicShare = P.toCompressedBytes()
 
         if (!sessionHasSignerPublicShare(publicShare)) {
             throw IllegalArgumentException("The signer's pubshare must be included in the list of pubshares.")
@@ -137,19 +161,23 @@ data class FrostSessionContext(
 
         val a = getSessionInterpolatingValue(my_id)
         val g = if (sessionValues.frostTweakContext.Q.hasEvenY()) {
-            BigInteger.ONE
+            Scalar(
+                BigInteger.ONE
+            )
         } else {
-            BigInteger.ONE.negate()
+            Scalar(
+                BigInteger.ONE.negate()
+            )
         }
 
-        val d = g.multiply(sessionValues.frostTweakContext.gacc).times(d_).mod(CryptographicConstants.n)
+        val d = g.times(sessionValues.frostTweakContext.gacc).times(d_)
         val bk2 = sessionValues.b.times(k2)
 
         val ead = sessionValues.e.times(a).times(d)
         val s = k1.plus(
-            bk2
+            bk2.toBigInteger()
         ).plus(
-            ead
+            ead.toBigInteger()
         )
         val frostPartialSignature = FrostPartialSignature(
             ByteVector32(
@@ -157,13 +185,15 @@ data class FrostSessionContext(
             )
         )
 
-        val R_s1 = Point.G.mul(k1_)
-        val R_s2 = Point.G.mul(k2_)
+        val R_s1 = GroupElement.GENERATOR_POINT.mul(k1_)
+        val R_s2 = GroupElement.GENERATOR_POINT.mul(k2_)
 
-        require(R_s1 != null) { "sign R_s1 can't be null" }
-        require(R_s2 != null) { "sign R_s2 can't be null" }
+        require(!R_s1.isInfinity) { "sign R_s1 can't be infinity" }
+        require(!R_s2.isInfinity) { "sign R_s2 can't be infinity" }
 
-        val frostPublicNonce = FrostPublicNonce(R_s1.compressedBytes() + R_s2.compressedBytes())
+        val frostPublicNonce = FrostPublicNonce(
+            R_s1.toCompressedBytes().value.toByteArray() + R_s2.toCompressedBytes().value.toByteArray()
+        )
 
         require(
             partialSignatureVerify(
@@ -186,15 +216,17 @@ data class FrostSessionContext(
         frostPublicNonce: FrostPublicNonce,
         publicShare: PublicKey
     ): Boolean {
+        logger.d("partial_sig_verify_internal: ${frostPartialSignature.value}")
         val sessionValues = getSessionValues()
 
-        val s = frostPartialSignature.toBigInteger()
+        val s = Scalar.fromBytesNonZeroChecked(
+            frostPartialSignature.value.toByteArray()
+        )
 
-        if (s >= CryptographicConstants.n) {
-            return false
-        }
+        logger.d("s: $s")
 
         if (!sessionHasSignerPublicShare(publicShare)) {
+            logger.e("publicShare not in shares")
             return false
         }
 
@@ -203,32 +235,54 @@ data class FrostSessionContext(
             return false
         }
 
-        val R_s1 = Point.fromCompressedBytes(
-            frostPublicNonce.value.sliceArray(0..32)
+        val R_s1 = GroupElement.fromCompressedBytes(
+            PublicKey(
+                frostPublicNonce.value.sliceArray(0..32)
+            )
         )
-        val R_s2 = Point.fromCompressedBytes(
-            frostPublicNonce.value.sliceArray(33..65)
+        logger.d("R1_partial: $R_s1")
+        val R_s2 = GroupElement.fromCompressedBytes(
+            PublicKey(
+                frostPublicNonce.value.sliceArray(33..65)
+            )
         )
+        logger.d("R2_partial: $R_s2")
 
-        val Re_s_ = R_s1.add(R_s2.mul(sessionValues.b))
+        val Re_s_ = R_s1.add(R_s2.mul(sessionValues.b.toBigInteger()))
+        logger.d("Re_S_: $Re_s_")
         val Re_s = if (sessionValues.R.hasEvenY()) {
             Re_s_
         } else {
-            Re_s_?.negate()
+            Re_s_.negate()
         }
+        logger.d("Re_s: $Re_s")
 
-        val P = Point.fromCompressedBytes(publicShare.value.toByteArray())
+        val P = try {
+            GroupElement.fromCompressedBytes(publicShare)
+        } catch (e: Throwable) {
+            logger.d("Failed to get P: ", e)
+            return false
+        }
+        logger.d("P: $P")
 
         val a = getSessionInterpolatingValue(my_id)
+        logger.d("a: $a")
         val g = if (sessionValues.frostTweakContext.Q.hasEvenY()) {
-            BigInteger.ONE
+            Scalar(BigInteger.ONE)
         } else {
-            BigInteger.ONE.negate()
+            Scalar(BigInteger.ONE.negate())
         }
+        logger.d("g: $g")
         val g_ = g.times(sessionValues.frostTweakContext.gacc)
+        logger.d("g_: $g_")
 
-        val multiple = P.mul(sessionValues.e.times(a).times(g_))
-        return Point.G.mul(s) == (Re_s?.add(multiple) ?: multiple)
+        val multiple = P.mul(sessionValues.e.times(a).times(g_).toBigInteger())
+        logger.d("multiple: $multiple")
+
+        return GroupElement.GENERATOR_POINT.mul(s.toBigInteger()).toUncompressedBytes()
+            .contentEquals(
+                (Re_s.add(multiple)).toUncompressedBytes()
+            )
     }
 
     fun partialSignatureAggregate(
@@ -241,30 +295,37 @@ data class FrostSessionContext(
 
         val sessionValues = getSessionValues()
 
-        var s = BigInteger.ZERO
+        var s = Scalar(BigInteger.ZERO)
 
         identifiers.zip(partialSignatures).forEach { (identifier, partialSignature) ->
-            val s_i = partialSignature.toBigInteger()
-            if (s_i >= CryptographicConstants.n) {
-                throw InvalidContributionException(identifier.toBigInteger(), "psig", null)
+            val s_i = try {
+                Scalar.fromBytesNonZeroChecked(
+                    partialSignature
+                )
+            } catch (e: Throwable) {
+                throw InvalidContributionException(identifier.toBigInteger(), "psig", e)
             }
-            s = s.plus(s_i).mod(CryptographicConstants.n)
+            s = s.plus(s_i)
         }
 
         val g = if (sessionValues.frostTweakContext.Q.hasEvenY()) {
-            BigInteger.ONE
+            Scalar(
+                BigInteger.ONE
+            )
         } else {
-            CryptographicConstants.n.minus(BigInteger.ONE)
+            Scalar(
+                BigInteger.ONE.negate()
+            )
         }
 
-        s = (s.plus(sessionValues.e.times(g).times(sessionValues.frostTweakContext.tacc))).mod(CryptographicConstants.n)
-        return sessionValues.R.xbytes() + s.toByteArray()
+        s = (s.plus(sessionValues.e.times(g).times(sessionValues.frostTweakContext.tacc)))
+        return sessionValues.R.toXonlyPublicKey().value.toByteArray() + s.toByteArray()
     }
 
     data class SessionValues(
         val frostTweakContext: FrostTweakContext,
-        val b: BigInteger,
-        val R: Point,
-        val e: BigInteger
+        val b: Scalar,
+        val R: GroupElement,
+        val e: Scalar
     )
 }

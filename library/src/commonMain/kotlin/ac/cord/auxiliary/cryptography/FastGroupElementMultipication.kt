@@ -2,6 +2,7 @@ package ac.cord.auxiliary.cryptography
 
 import co.touchlab.kermit.Logger
 import com.ionspin.kotlin.bignum.integer.BigInteger
+import kotlin.math.log
 
 class FastGroupElementMultiplication(
     groupElement: GroupElement
@@ -12,8 +13,7 @@ class FastGroupElementMultiplication(
     init {
         var point = groupElement
 
-        for (i in 0..255) {
-            logger.d("p: $point")
+        for (i in 0 until 255) {
             point = point.add(point)
 
             table.add(point)
@@ -27,23 +27,20 @@ class FastGroupElementMultiplication(
     }
 
     fun mul(a: Scalar): GroupElement {
-        return mul(a.aPrimeFE)
+        return mul(a.toBigInteger())
     }
 
     fun mul(a: BigInteger): GroupElement {
         var result: GroupElement = GroupElement.INFINITY
 
-        val a_ = a
-        logger.d("a_: $a")
         for (bit in 0..a.bitLength()) {
-            if (a_ and (BigInteger.ONE shl  bit) == BigInteger.ONE) {
+            if (a and (BigInteger.ONE shl  bit) != BigInteger.ZERO) {
                 val item = table[bit]
 
                 result = result.add(item)
             }
         }
 
-        logger.d("Result: $result")
         return result
     }
 
