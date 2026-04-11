@@ -18,10 +18,17 @@ class FieldElement(
         denominator = other.denominator
     )
 
+    /**
+     * This is the same as from_int_checked in bip-frost-signing
+     */
     constructor(other: BigInteger): this(
         numerator = other.mod(SIZE),
         denominator = BigInteger.ONE
-    )
+    ) {
+        if (other >= size) {
+            throw IllegalArgumentException("int ($numerator) is too large for from_int_checked")
+        }
+    }
 
     constructor(a: FieldElement, b: FieldElement): this(
         numerator = a.numerator.times(b.denominator).mod(SIZE),
@@ -37,6 +44,7 @@ class FieldElement(
         numerator = a.numerator,
         denominator = a.denominator.times(b).mod(SIZE)
     )
+
 
     fun sqrt(): FieldElement? {
         val v = this.toBigInteger()

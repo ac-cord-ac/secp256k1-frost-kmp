@@ -132,7 +132,7 @@ object Frost {
             frostPublicNonces.forEachIndexed { index, publicNonce ->
                 val R_ij = try {
                     val startingIndex =  (j-1)*33
-                    val endingIndex = j*32 + (j-1)
+                    val endingIndex = j*32 + (j-1) // TODO: use until below so this can be j*33
 
                     val pubkey = PublicKey(
                         publicNonce.value.sliceArray(startingIndex..endingIndex)
@@ -327,8 +327,8 @@ object Frost {
         val R_s1 = GroupElement.GENERATOR_POINT.mul(k_1)
         val R_s2 = GroupElement.GENERATOR_POINT.mul(k_2)
 
-        require(R_s1 != null) { "deterministicSign R_s1 can't be null" }
-        require(R_s2 != null) { "deterministicSign R_s2 can't be null" }
+        require(!R_s1.isInfinity) { "deterministicSign R_s1 can't be infinity" }
+        require(!R_s2.isInfinity) { "deterministicSign R_s2 can't be infinity" }
 
         val frostPublicNonce = FrostPublicNonce(
             R_s1.toCompressedBytes().value.toByteArray() + R_s2.toCompressedBytes().value.toByteArray()
