@@ -950,7 +950,11 @@ class FrostTests {
             }
 
             val partialSignaturesTemp = validTestCase.jsonObject["psigs"]!!.jsonArray.map { jsonElement ->
-                Hex.decode(jsonElement.jsonPrimitive.content)
+                FrostPartialSignature(
+                    ByteVector32(
+                        Hex.decode(jsonElement.jsonPrimitive.content)
+                    )
+                )
             }
 
             val expected = Hex.decode(validTestCase.jsonObject["expected"]!!.jsonPrimitive.content)
@@ -970,8 +974,7 @@ class FrostTests {
             )
 
             val signature = frostSessionContext.partialSignatureAggregate(
-                partialSignaturesTemp,
-                identifiersTemp
+                partialSignaturesTemp
             )
 
             assertContentEquals(
@@ -1022,7 +1025,11 @@ class FrostTests {
             }
 
             val partialSignaturesTemp = errorTestCase.jsonObject["psigs"]!!.jsonArray.map { jsonElement ->
-                Hex.decode(jsonElement.jsonPrimitive.content)
+                FrostPartialSignature(
+                    ByteVector32(
+                        Hex.decode(jsonElement.jsonPrimitive.content)
+                    )
+                )
             }
 
             val frostSessionContext = FrostSessionContext(
@@ -1042,7 +1049,6 @@ class FrostTests {
             val throwable = assertFailsWith<Throwable> {
                 frostSessionContext.partialSignatureAggregate(
                     partialSignaturesTemp,
-                    identifiersTemp,
                 )
             }
 

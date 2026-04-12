@@ -281,10 +281,9 @@ data class FrostSessionContext(
     }
 
     fun partialSignatureAggregate(
-        partialSignatures: List<ByteArray>,
-        identifiers: List<Int>,
+        partialSignatures: List<FrostPartialSignature>,
     ): ByteArray {
-        if (partialSignatures.size != identifiers.size) {
+        if (partialSignatures.size != frostSignersContext.identifiers.size) {
             throw IllegalArgumentException("The psigs and ids arrays must have the same length.")
         }
 
@@ -292,10 +291,10 @@ data class FrostSessionContext(
 
         var s = Scalar(BigInteger.ZERO)
 
-        identifiers.zip(partialSignatures).forEach { (identifier, partialSignature) ->
+        frostSignersContext.identifiers.zip(partialSignatures).forEach { (identifier, partialSignature) ->
             val s_i = try {
                 Scalar.fromBytesChecked(
-                    partialSignature
+                    partialSignature.value.toByteArray()
                 )
             } catch (e: Throwable) {
                 throw InvalidContributionException(identifier.toBigInteger(), "psig", e)

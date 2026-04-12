@@ -42,6 +42,7 @@ data class FrostSignersContext(
             throw IllegalArgumentException("The participant identifier list contains duplicate elements.")
         }
 
+        logger.d("Group Public Key: $groupPublicKey")
         if (deriveThresholdPublicKey() != groupPublicKey) {
             throw IllegalArgumentException("The provided key material is incorrect.")
         }
@@ -65,6 +66,7 @@ data class FrostSignersContext(
         }
 
         require(!Q.isInfinity) {"Q should not be at infinity"}
+        logger.d("Derived Public Key: ${Q.toCompressedBytes()}")
         return Q.toCompressedBytes()
     }
 
