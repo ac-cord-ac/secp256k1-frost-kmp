@@ -3,6 +3,7 @@ package ac.cord.auxiliary.frost
 import ac.cord.auxiliary.cryptography.CryptographicConstants
 import ac.cord.auxiliary.cryptography.GroupElement
 import ac.cord.auxiliary.cryptography.Scalar
+import ac.cord.auxiliary.cryptography.requireWithinCurveOrderRange
 import ac.cord.auxiliary.cryptography.to4LengthByteArray
 import ac.cord.auxiliary.cryptography.to8LengthByteArray
 import ac.cord.auxiliary.cryptography.toBigInteger
@@ -215,23 +216,35 @@ object Frost {
     fun groupPublicKeyAndTweet(
         publicShares: List<PublicKey>,
         ids: List<Int>,
-        tweaks: List<ByteArray>,
+        tweaks: List<ByteVector32>,
         isXonlies: List<Boolean>
     ): FrostTweakContext {
         if (publicShares.size != ids.size) {
             throw IllegalArgumentException("The pubshares and ids arrays must have the same length.")
         }
 
+        val groupPublicKey = deriveGroupPublicKey(publicShares, ids)
+        return groupPublicKeyAndTweet(
+            groupPublicKey = groupPublicKey,
+            tweaks = tweaks,
+            isXonlies = isXonlies
+        )
+    }
+
+    fun groupPublicKeyAndTweet(
+        groupPublicKey: PublicKey,
+        tweaks: List<ByteVector32>,
+        isXonlies: List<Boolean>
+    ): FrostTweakContext {
         if (tweaks.size != isXonlies.size) {
             throw IllegalArgumentException("The tweaks and is_xonly arrays must have the same length.")
         }
 
-        val groupPublicKey = deriveGroupPublicKey(publicShares, ids)
         var frostTweakContext = FrostTweakContext(groupPublicKey)
 
         tweaks.zip(isXonlies).forEach { (tweak, isXonly) ->
             frostTweakContext = frostTweakContext.applyTweak(
-                ByteVector32(tweak),
+                tweak,
                 isXonly
             )
         }
@@ -244,7 +257,7 @@ object Frost {
         frostPartialSignature: FrostPartialSignature,
         frostPublicNonces: List<FrostPublicNonce>,
         frostSignersContext: FrostSignersContext,
-        tweaks: List<ByteArray>,
+        tweaks: List<ByteVector32>,
         isXonlies: List<Boolean>,
         message: ByteArray,
         index: Int
@@ -287,45 +300,48 @@ object Frost {
         my_id: Int,
         aggothernonce: FrostPublicNonce,
         frostSignersContext: FrostSignersContext,
-        identifiers: List<Int>,
-        publicShares: List<PublicKey>,
-        tweaks: List<ByteArray>,
+        tweaks: List<ByteVector32>,
         isXonlies: List<Boolean>,
         message: ByteArray,
         rand: ByteArray?
     ): Pair<FrostPublicNonce, FrostPartialSignature> {
-        val secretShareInteger = secretShare.toBigInteger()
-
-        if (secretShareInteger < BigInteger.ZERO || secretShareInteger > CryptographicConstants.n) {
-            throw IllegalArgumentException("The signer's secret share value is out of range.")
-        }
-
-        val signerPublicShare = individualPublicKey(secretShare)
-
-        if (publicShares.contains(signerPublicShare)) {
-            throw IllegalArgumentException("The signer\\'s pubshare must be included in the list of pubshares.")
-        }
+        secretShare.toBigInteger().requireWithinCurveOrderRange("The signer's secret share value is out of range.")
 
         val secShare_ = computeSecretShare(
             rand, secretShare
         )
 
+        logger.d("secShare: ${secShare_.toHexString()}" )
+        frostSignersContext.validateSignersContext()
+
         val tweakedGroupPublicKey = groupPublicKeyAndTweet(
-            publicShares,
-            identifiers,
-            tweaks,
-            isXonlies
+            groupPublicKey = frostSignersContext.groupPublicKey,
+            tweaks = tweaks,
+            isXonlies = isXonlies
         ).getXonlyPublicKey()
+        logger.d("tweaked_tpk: $tweakedGroupPublicKey")
 
-        val k_1 = deterministicNonceHash(
-            secShare_, aggothernonce.value, tweakedGroupPublicKey, message, 0
-        ).mod(CryptographicConstants.n)
-        val k_2 = deterministicNonceHash(
-            secShare_, aggothernonce.value, tweakedGroupPublicKey, message, 1
-        ).mod(CryptographicConstants.n)
+        val k_1 = Scalar.fromBytesWrapping(
+            deterministicNonceHash(
+                secShare_, aggothernonce.value, tweakedGroupPublicKey, message, 0
+            )
+        )
+        logger.d("k_1: $k_1")
+        val k_2 = Scalar.fromBytesWrapping(
+            deterministicNonceHash(
+                secShare_, aggothernonce.value, tweakedGroupPublicKey, message, 1
+            )
+        )
+        logger.d("k_2: $k_2")
 
-        val R_s1 = GroupElement.GENERATOR_POINT.mul(k_1)
-        val R_s2 = GroupElement.GENERATOR_POINT.mul(k_2)
+        require(k_1.toBigInteger() != BigInteger.ZERO)
+        require(k_2.toBigInteger() != BigInteger.ZERO)
+
+        val R_s1 = GroupElement.GENERATOR_POINT.mul(k_1.toBigInteger())
+        logger.d("R_s1: $R_s1")
+        val R_s2 = GroupElement.GENERATOR_POINT.mul(k_2.toBigInteger())
+        logger.d("R_s2: $R_s2")
+
 
         require(!R_s1.isInfinity) { "deterministicSign R_s1 can't be infinity" }
         require(!R_s2.isInfinity) { "deterministicSign R_s2 can't be infinity" }
@@ -333,43 +349,49 @@ object Frost {
         val frostPublicNonce = FrostPublicNonce(
             R_s1.toCompressedBytes().value.toByteArray() + R_s2.toCompressedBytes().value.toByteArray()
         )
+        logger.d("pubnonce: ${frostPublicNonce.value.toHexString()}" )
         val frostSecretNonce = FrostSecretNonce(
             k_1.toByteArray() + k_2.toByteArray()
         )
+        logger.d("secnonce :${frostSecretNonce.getSecretNonce().toHexString()}")
 
-        try {
-            val aggregateNonce = nonceAgg(
+        val aggregateNonce = try {
+            nonceAgg(
                 listOf(frostPublicNonce, aggothernonce),
-            )
-
-            val frostSessionContext = FrostSessionContext(
-                frostSignersContext = frostSignersContext,
-                aggregateNonce,
-                tweaks,
-                isXonlies,
-                message
-            )
-            val partialSignature = frostSessionContext.sign(
-                frostSecretNonce,
-                secretShare,
-                my_id,
-            )
-
-            return Pair(
-                frostPublicNonce,
-                partialSignature
             )
         } catch (e: Throwable) {
             throw InvalidContributionException(null, "aggothernonce", e)
         }
+        logger.d("aggnonce: ${aggregateNonce.toHexString()}")
+
+        val frostSessionContext = FrostSessionContext(
+            frostSignersContext = frostSignersContext,
+            aggregateNonce,
+            tweaks,
+            isXonlies,
+            message
+        )
+        val partialSignature = frostSessionContext.sign(
+            frostSecretNonce,
+            secretShare,
+            my_id,
+        )
+        logger.d("psig: ${partialSignature.value.toByteArray().toHexString()}")
+
+        return Pair(
+            frostPublicNonce,
+            partialSignature
+        )
     }
 
-    fun deterministicNonceHash(secretShare: ByteArray, aggothernonce: ByteArray, tweakedGroupPublicKey: XonlyPublicKey, message: ByteArray, index: Int): BigInteger {
-        val buffer = secretShare + tweakedGroupPublicKey.value.toByteArray() + aggothernonce +
+    fun deterministicNonceHash(secretShare: ByteArray, aggothernonce: ByteArray, tweakedGroupPublicKey: XonlyPublicKey, message: ByteArray, index: Int): ByteArray {
+
+        val buffer = secretShare + aggothernonce + tweakedGroupPublicKey.value.toByteArray()  +
                 message.size.to8LengthByteArray() + message +
                 byteArrayOf(index.toByte())
 
-        return taggedHash("FROST/deterministic/nonce", buffer).toBigInteger()
+        logger.d("buf: ${buffer.toHexString()}")
+        return taggedHash("FROST/deterministic/nonce", buffer)
     }
 
 

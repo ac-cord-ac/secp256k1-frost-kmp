@@ -15,7 +15,7 @@ import fr.acinq.bitcoin.PublicKey
 data class FrostSessionContext(
     val frostSignersContext: FrostSignersContext,
     val aggNonce: ByteArray,
-    val tweaks: List<ByteArray>,
+    val tweaks: List<ByteVector32>,
     val isXonlies: List<Boolean>,
     val message: ByteArray
 ) {

@@ -26,9 +26,6 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
-
-
-
 class FrostTests {
     val logger = Logger.withTag("FrostTests")
 
@@ -552,7 +549,9 @@ class FrostTests {
             Hex.decode(jsonElement.jsonPrimitive.content)
         }
         val tweaks = testData.jsonObject["tweaks"]!!.jsonArray.map { jsonElement ->
-            Hex.decode(jsonElement.jsonPrimitive.content)
+            ByteVector32(
+                Hex.decode(jsonElement.jsonPrimitive.content)
+            )
         }
 
         val message = Hex.decode(testData.jsonObject["msg"]!!.jsonPrimitive.content)
@@ -697,6 +696,199 @@ class FrostTests {
     }
 
     @Test
+    fun `test det sign vectors`() {
+        val testData = TestHelpers.readResourceAsJson("vectors/det_sign_vectors.json")
+
+        val n = testData.jsonObject["n"]!!.jsonPrimitive.int
+        val t = testData.jsonObject["t"]!!.jsonPrimitive.int
+
+        val secretShareP0 = testData.getValue("secshare_p0")
+        val identifiers = testData.jsonObject["identifiers"]!!.jsonArray.map { jsonElement ->
+            jsonElement.jsonPrimitive.int
+        }
+
+        val publicShares = testData.jsonObject["pubshares"]!!.jsonArray.map { jsonElement ->
+            PublicKey(Hex.decode(jsonElement.jsonPrimitive.content))
+        }
+
+        assertEquals(
+            publicShares.first(),
+            Frost.individualPublicKey(secretShareP0)
+        )
+
+
+        val groupPublicKey = PublicKey(
+            testData.getValue("threshold_pubkey")
+        )
+
+        val messages = testData.jsonObject["msgs"]!!.jsonArray.map { jsonElement ->
+            Hex.decode(jsonElement.jsonPrimitive.content)
+        }
+
+
+        for (validTestCase in testData.jsonObject["valid_test_cases"]!!.jsonArray) {
+            logger.d(validTestCase.jsonObject["comment"]?.jsonPrimitive?.content ?: "")
+
+            val identifiersTemp =
+                validTestCase.jsonObject["id_indices"]!!.jsonArray.map { jsonElement ->
+                    identifiers[jsonElement.jsonPrimitive.int]
+                }
+
+            val pubicSharesTemp =
+                validTestCase.jsonObject["pubshare_indices"]!!.jsonArray.map { jsonElement ->
+                    publicShares[jsonElement.jsonPrimitive.int]
+                }
+
+            val aggothernonce = FrostPublicNonce(
+                Hex.decode(
+                    validTestCase.jsonObject["aggothernonce"]!!.jsonPrimitive.content
+                )
+            )
+
+            val tweaks = validTestCase.jsonObject["tweaks"]!!.jsonArray.map { jsonElement ->
+                ByteVector32(
+                    Hex.decode(jsonElement.jsonPrimitive.content)
+                )
+            }
+
+            val tweakModesTemp =
+                validTestCase.jsonObject["is_xonly"]!!.jsonArray.map { jsonElement ->
+                    jsonElement.jsonPrimitive.boolean
+                }
+
+            val message = messages[validTestCase.jsonObject["msg_index"]!!.jsonPrimitive.int]
+            val signerIndex = validTestCase.jsonObject["signer_index"]!!.jsonPrimitive.int
+            val myIdentifier = identifiersTemp[signerIndex]
+
+            val rand = validTestCase.getValueOrNull("rand")
+
+            val expected = validTestCase.jsonObject["expected"]!!.jsonArray.map { jsonElement ->
+                Hex.decode(jsonElement.jsonPrimitive.content)
+            }
+
+            val frostSignersContext = FrostSignersContext(
+                n = n,
+                t = t,
+                identifiers = identifiersTemp,
+                publicShares = pubicSharesTemp,
+                groupPublicKey = groupPublicKey
+            )
+
+            val (publicNonce, partialSignature) = Frost.deterministicSign(
+                secretShareP0,
+                myIdentifier,
+                aggothernonce,
+                frostSignersContext,
+                tweaks,
+                isXonlies = tweakModesTemp,
+                message,
+                rand
+            )
+
+            assertContentEquals(
+                expected[0],
+                publicNonce.value
+            )
+
+            assertContentEquals(
+                expected[1],
+                partialSignature.value.toByteArray()
+            )
+
+            val publicNonces = listOf(
+                aggothernonce,
+                publicNonce
+            )
+            val aggNonceTemp = Frost.nonceAgg(
+                publicNonces
+            )
+            val sessionContext = FrostSessionContext(
+                frostSignersContext = frostSignersContext,
+                aggNonce = aggNonceTemp,
+                tweaks = tweaks,
+                isXonlies = tweakModesTemp,
+                message = message
+            )
+
+            assertTrue {
+                sessionContext.partialSignatureVerify(
+                    frostPartialSignature = partialSignature,
+                    my_id = myIdentifier,
+                    frostPublicNonce = publicNonce,
+                    publicShare = pubicSharesTemp[signerIndex],
+                )
+            }
+        }
+
+        for (errorTestCase in testData.jsonObject["error_test_cases"]!!.jsonArray) {
+            logger.d(errorTestCase.jsonObject["comment"]?.jsonPrimitive?.content ?: "")
+
+            val (expectedException, exceptionProcessor) = errorTestCase.getErrorDetails("error")
+
+            val identifiersTemp =
+                errorTestCase.jsonObject["id_indices"]!!.jsonArray.map { jsonElement ->
+                    identifiers[jsonElement.jsonPrimitive.int]
+                }
+
+            val pubicSharesTemp =
+                errorTestCase.jsonObject["pubshare_indices"]!!.jsonArray.map { jsonElement ->
+                    publicShares[jsonElement.jsonPrimitive.int]
+                }
+
+            val aggothernonce = FrostPublicNonce(
+                Hex.decode(
+                    errorTestCase.jsonObject["aggothernonce"]!!.jsonPrimitive.content
+                )
+            )
+
+            val tweaks = errorTestCase.jsonObject["tweaks"]!!.jsonArray.map { jsonElement ->
+                ByteVector32(
+                    Hex.decode(jsonElement.jsonPrimitive.content)
+                )
+            }
+
+            val tweakModesTemp =
+                errorTestCase.jsonObject["is_xonly"]!!.jsonArray.map { jsonElement ->
+                    jsonElement.jsonPrimitive.boolean
+                }
+
+            val message = messages[errorTestCase.jsonObject["msg_index"]!!.jsonPrimitive.int]
+            val myIdentifier = errorTestCase.jsonObject["signer_index"]?.jsonPrimitive?.intOrNull?.let { signerIndex ->
+                identifiersTemp[signerIndex]
+            } ?: errorTestCase.jsonObject["signer_id"]!!.jsonPrimitive.int
+
+
+            val rand = errorTestCase.getValueOrNull("rand")
+
+            val frostSignersContext = FrostSignersContext(
+                n = n,
+                t = t,
+                identifiers = identifiersTemp,
+                publicShares = pubicSharesTemp,
+                groupPublicKey = groupPublicKey
+            )
+
+            val throwable = assertFailsWith<Throwable> {
+                Frost.deterministicSign(
+                    secretShareP0,
+                    myIdentifier,
+                    aggothernonce,
+                    frostSignersContext,
+                    tweaks,
+                    isXonlies = tweakModesTemp,
+                    message,
+                    rand
+                )
+            }
+
+            throwable.testThrowable(
+                expectedException,
+                exceptionProcessor
+            )
+        }
+    }
+
+    @Test
     fun `test sig agg vectors`() {
         val testData = TestHelpers.readResourceAsJson("vectors/sig_agg_vectors.json")
 
@@ -722,7 +914,9 @@ class FrostTests {
         }
 
         val tweaks = testData.jsonObject["tweaks"]!!.jsonArray.map { jsonElement ->
-            Hex.decode(jsonElement.jsonPrimitive.content)
+            ByteVector32(
+                Hex.decode(jsonElement.jsonPrimitive.content)
+            )
         }
 
         val message = Hex.decode(testData.jsonObject["msg"]!!.jsonPrimitive.content)
