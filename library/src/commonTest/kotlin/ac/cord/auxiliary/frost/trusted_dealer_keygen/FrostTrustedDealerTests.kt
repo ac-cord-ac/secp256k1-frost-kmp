@@ -118,7 +118,7 @@ class FrostTrustedDealerTests {
 
         val thresholdSecretKey = Scalar.fromBytesNonZeroChecked(thresholdSecretKeyBytes)
         val thresholdPublicKey = GroupElement.fromCompressedBytes(frostTrustedDealership.thresholdPublicKey)
-        val secretShares = frostTrustedDealership.secretShares.map { Scalar.fromBytesNonZeroChecked(it) }
+        val secretShares = frostTrustedDealership.secretShares.map { Scalar.fromBytesNonZeroChecked(it.toByteArray()) }
         val publicShares = frostTrustedDealership.publicShares.map { GroupElement.fromCompressedBytes(it) }
 
         assertContentEquals(

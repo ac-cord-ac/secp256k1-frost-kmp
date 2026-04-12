@@ -36,8 +36,10 @@ class FrostTests {
         for (testCase in testCases) {
             logger.d(testCase.jsonObject["comment"]!!.jsonPrimitive.content)
 
-            val rand_ = testCase.getValue("rand_")
-            val secretShare = testCase.getValueOrNull("secshare")
+            val rand_ = ByteVector32(
+                testCase.getValue("rand_")
+            )
+            val secretShare = testCase.getValueOrNull("secshare")?.let { ByteVector32(it) }
             val publicShare = testCase.getValueOrNull("pubshare")?.let { PublicKey(it) }
 
             val thresholdPublicKey = testCase.getValueOrNull("threshold_pubkey")?.let {
@@ -131,7 +133,9 @@ class FrostTests {
         val n = testData.jsonObject["n"]!!.jsonPrimitive.int
         val t = testData.jsonObject["t"]!!.jsonPrimitive.int
 
-        val secretShareP0 = testData.getValue("secshare_p0")
+        val secretShareP0 = ByteVector32(
+            testData.getValue("secshare_p0")
+        )
         val identifiers = testData.jsonObject["identifiers"]!!.jsonArray.map { jsonElement ->
             jsonElement.jsonPrimitive.int
         }
@@ -406,7 +410,9 @@ class FrostTests {
         val n = testData.jsonObject["n"]!!.jsonPrimitive.int
         val t = testData.jsonObject["t"]!!.jsonPrimitive.int
 
-        val secretShareP1 = testData.getValue("secshare_p0")
+        val secretShareP1 = ByteVector32(
+            testData.getValue("secshare_p0")
+        )
         val identifiers = testData.jsonObject["identifiers"]!!.jsonArray.map { jsonElement ->
             jsonElement.jsonPrimitive.int
         }
@@ -602,7 +608,9 @@ class FrostTests {
         val n = testData.jsonObject["n"]!!.jsonPrimitive.int
         val t = testData.jsonObject["t"]!!.jsonPrimitive.int
 
-        val secretShareP0 = testData.getValue("secshare_p0")
+        val secretShareP0 = ByteVector32(
+            testData.getValue("secshare_p0")
+        )
         val identifiers = testData.jsonObject["identifiers"]!!.jsonArray.map { jsonElement ->
             jsonElement.jsonPrimitive.int
         }

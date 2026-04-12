@@ -5,6 +5,7 @@ import ac.cord.auxiliary.cryptography.Scalar
 import ac.cord.auxiliary.frost.Frost
 import co.touchlab.kermit.Logger
 import com.ionspin.kotlin.bignum.integer.BigInteger
+import fr.acinq.bitcoin.ByteVector32
 import fr.acinq.lightning.utils.secure
 import kotlin.random.Random
 
@@ -42,7 +43,9 @@ object FrostTrustedDealer {
             n
         )
 
-        val secretShares = secretSharesScalars.map { it.toByteArray() }
+        val secretShares = secretSharesScalars.map {
+            ByteVector32(it.toByteArray())
+        }
 
         val publicShareGroupElements = secretSharesScalars.map { GroupElement.GENERATOR_POINT.mul(it.toBigInteger()) }
         val publicShares = publicShareGroupElements.map { it.toCompressedBytes() }

@@ -113,7 +113,7 @@ data class FrostSessionContext(
         return frostSignersContext.publicShares.contains(publicShare)
     }
 
-    fun sign(frostSecretNonce: FrostSecretNonce, secretShare: ByteArray, my_id: Int): FrostPartialSignature {
+    fun sign(frostSecretNonce: FrostSecretNonce, secretShare: ByteVector32, my_id: Int): FrostPartialSignature {
         val sessionValues = getSessionValues()
         val k1_ = try {
             val slice = frostSecretNonce.getSecretNonce().sliceArray(0..31)

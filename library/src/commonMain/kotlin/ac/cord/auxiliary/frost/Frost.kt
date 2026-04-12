@@ -47,15 +47,15 @@ object Frost {
         return taggedHash("FROST/nonce", buffer).toBigInteger()
     }
 
-    private fun computeRand(rand_: ByteArray, secretShare: ByteArray?): ByteArray {
-        return secretShare?.xor(
-            taggedHash("FROST/aux", rand_)
-        ) ?: rand_
+    private fun computeRand(rand_: ByteVector32, secretShare: ByteVector32?): ByteArray { // TODO: Might want to make this ByteVector32
+        return secretShare?.toByteArray()?.xor(
+            taggedHash("FROST/aux", rand_.toByteArray())
+        ) ?: rand_.toByteArray()
     }
 
     fun nonceGen(
-        rand_: ByteArray,
-        secretShare: ByteArray?,
+        rand_: ByteVector32,
+        secretShare: ByteVector32?,
         publicShare: PublicKey?,
         thresholdPublicKey: XonlyPublicKey?,
         message: ByteArray?,
@@ -106,13 +106,11 @@ object Frost {
         )
     }
 
-    fun nonceGen(secretShare: ByteArray?, publicShare: PublicKey?, thresholdPublicKey: XonlyPublicKey?, message: ByteArray?, extraIn: ByteArray?): Pair<FrostSecretNonce, FrostPublicNonce> {
+    fun nonceGen(secretShare: ByteVector32?, publicShare: PublicKey?, thresholdPublicKey: XonlyPublicKey?, message: ByteArray?, extraIn: ByteArray?): Pair<FrostSecretNonce, FrostPublicNonce> {
 
-        if (secretShare != null && secretShare.size != 32) {
-            throw IllegalArgumentException("The optional byte array secshare must have length 32.")
-        }
-
-        val rand_ = Random.secure().nextBytes(32)
+        val rand_ = ByteVector32(
+            Random.secure().nextBytes(32)
+        )
         return nonceGen(
             rand_ = rand_,
             secretShare = secretShare,
@@ -265,7 +263,7 @@ object Frost {
     ): Boolean {
         frostSignersContext.validateSignersContext()
 
-        if (frostSignersContext.publicShares.size != frostPublicNonces.size) {
+        if (frostSignersContext.publicShares.size != frostSignersContext.identifiers.size || frostSignersContext.publicShares.size != frostPublicNonces.size) {
             throw IllegalArgumentException("The pubnonces and ids arrays must have the same length.")
         }
         if (tweaks.size != isXonlies.size) {
@@ -286,18 +284,18 @@ object Frost {
         )
     }
 
-    private fun computeSecretShare(rand: ByteArray?, secretShare: ByteArray): ByteArray {
+    private fun computeSecretShare(rand: ByteArray?, secretShare: ByteVector32): ByteArray { // TODO: Might want to make this ByteVector32
         return if (rand != null) {
-            secretShare.xor(
+            secretShare.toByteArray().xor(
                 taggedHash("FROST/aux", rand)
             )
         } else {
-            secretShare
+            secretShare.toByteArray()
         }
     }
 
     fun deterministicSign(
-        secretShare: ByteArray,
+        secretShare: ByteVector32,
         my_id: Int,
         aggothernonce: FrostPublicNonce,
         frostSignersContext: FrostSignersContext,
@@ -386,7 +384,7 @@ object Frost {
 
 
     fun individualPublicKey(
-        secretKey: ByteArray
+        secretKey: ByteVector32
     ): PublicKey {
         val d0 = secretKey.toBigInteger()
         if (d0 !in BigInteger.ONE..<GroupElement.ORDER) {
