@@ -1,12 +1,21 @@
 package ac.cord.auxiliary.frost
 
+import ac.cord.auxiliary.TestHelpers
+import ac.cord.auxiliary.extensions.getValue
 import ac.cord.auxiliary.frost.trusted_dealer_keygen.FrostTrustedDealer
 import ac.cord.auxiliary.frost.trusted_dealer_keygen.FrostTrustedDealership
 import co.touchlab.kermit.Logger
 import com.ionspin.kotlin.bignum.integer.toBigInteger
 import fr.acinq.bitcoin.ByteVector32
+import fr.acinq.bitcoin.PublicKey
 import fr.acinq.lightning.utils.secure
+import fr.acinq.secp256k1.Hex
 import fr.acinq.secp256k1.Secp256k1
+import kotlinx.serialization.json.boolean
+import kotlinx.serialization.json.int
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import kotlin.random.Random
 import kotlin.test.Test
 import kotlin.test.assertFailsWith
@@ -23,11 +32,12 @@ class RandomSignAndVerifyTests {
             throw IllegalArgumentException("values must satisfy: 2 <= t <= n")
         }
         val frostTrustedDealership = FrostTrustedDealer.keyGen(
-            thresholdSecretBytes = Random.secure().nextBytes(32),
+            thresholdSecretBytes = ByteVector32(
+                Random.secure().nextBytes(32)
+            ),
             n = n,
             t = t
         )
-        logger.d("${frostTrustedDealership.thresholdPublicKey} ${frostTrustedDealership.secretShares.map { it.toHexString() }} ${frostTrustedDealership.publicShares} ${frostTrustedDealership.identifiers}")
 
         require(frostTrustedDealership.secretShares.size == n) { "The number of secret shares needs to match n" }
 
@@ -36,28 +46,20 @@ class RandomSignAndVerifyTests {
     }
 
     @OptIn(ExperimentalTime::class)
-    @Test
-    fun `test sign and verify random`() {
-        val iteration = 0
-
-        val n = Random.secure().nextInt(2, 11)
-        logger.d("n: $n")
-        val t = Random.secure().nextInt(2, n+1)
-        logger.d("t: $t")
-
-        val frostTrustedDealership = generateFrostKeys(n, t)
-
+    private fun testSignAndVerify(
+        iteration: Int,
+        n: Int,
+        t: Int,
+        frostTrustedDealership: FrostTrustedDealership,
+        signerCount: Int,
+        signerIndices: List<Int>,
+        message: ByteArray,
+        tweaks: List<ByteVector32>,
+        tweaksModes: List<Boolean>
+    ) {
+        logger.d("iteration=$iteration n=$n t=$t signerCount=$signerCount message=${message.toHexString()} frostTrustedDealership=$frostTrustedDealership signerIndices=$signerIndices  tweaks=$tweaks tweakModes=$tweaksModes")
         require(frostTrustedDealership.identifiers.size == frostTrustedDealership.secretShares.size)
         require(frostTrustedDealership.secretShares.size == n)
-
-        val signerCount = Random.secure().nextInt(t, n+1)
-        val signerIndices = IntRange(0, signerCount-1).shuffled()
-
-        logger.d("Signer Count: $signerCount")
-        logger.d("Signer Indices: $signerIndices")
-        require(
-            signerIndices.toSet().size == signerCount
-        )
 
         val signerIdentifiers = signerIndices.map { frostTrustedDealership.identifiers[it] }
         val signerPublicShares = signerIdentifiers.map { frostTrustedDealership.publicShares[it] }
@@ -71,24 +73,6 @@ class RandomSignAndVerifyTests {
             thresholdPublicKey = frostTrustedDealership.thresholdPublicKey
         )
 
-        //  In this example, the message and threshold pubkey are known
-        // before nonce generation, so they can be passed into the nonce
-        // generation function as a defense-in-depth measure to protect
-        // against nonce reuse.
-        //
-        // If these values are not known when nonce_gen is called, empty
-        // byte arrays can be passed in for the corresponding arguments
-        // instead.
-        val message = Random.secure().nextBytes(32)
-        val v = Random.secure().nextInt(4)
-        logger.d("v: $v")
-        val tweaks = IntRange(0, v-1).map {
-            ByteVector32(
-                Random.secure().nextBytes(32)
-            )
-        }
-        val tweaksModes = IntRange(0, v-1).map { Random.secure().nextBoolean() }
-
         val tweakedThresholdPublicKey = Frost.thresholdPublicKeyAndTweak(
             frostTrustedDealership.thresholdPublicKey,
             tweaks,
@@ -98,7 +82,7 @@ class RandomSignAndVerifyTests {
         val signerSecretNonces = mutableListOf<FrostSecretNonce>()
         val signerPublicNonces = mutableListOf<FrostPublicNonce>()
 
-        IntRange(0, signerCount-1).forEach {  index ->
+        (0 until signerCount-1).forEach {  index ->
             val timestamp = Clock.System.now()
 
             val (frostSecretNonce, publicNonce) = Frost.nonceGen(
@@ -179,7 +163,6 @@ class RandomSignAndVerifyTests {
         val signerPartialSignatures = mutableListOf<FrostPartialSignature>()
 
         IntRange(0, signerCount-1).forEach { index ->
-            logger.d("Index: $index")
             val signerPartialSignature = if (iteration % 2 != 0 && index == signerCount-1) {
                 require(partialSignatureFinal != null) { "partialSignatureFinal shouldn't be null for this iteration" }
                 partialSignatureFinal
@@ -245,11 +228,119 @@ class RandomSignAndVerifyTests {
             signerPartialSignatures
         )
 
-        assertTrue {
+        assertTrue(
             Secp256k1.verifySchnorr(
                 signature = bip340Signature,
                 data = message,
                 pub = tweakedThresholdPublicKey.value.toByteArray()
+            ),
+            "BIP340 Schnorr signature verification failed"
+        )
+    }
+
+    @OptIn(ExperimentalTime::class)
+    @Test
+    fun `test sign and verify random`() {
+        for (iteration in (0..6)) {
+            val n = Random.secure().nextInt(2, 11)
+            val t = Random.secure().nextInt(2, n+1)
+
+            val frostTrustedDealership = generateFrostKeys(n, t)
+
+            require(frostTrustedDealership.identifiers.size == frostTrustedDealership.secretShares.size)
+            require(frostTrustedDealership.secretShares.size == n)
+
+            val signerCount = Random.secure().nextInt(t, n+1)
+            val signerIndices = IntRange(0, signerCount-1).shuffled()
+
+            require(
+                signerIndices.toSet().size == signerCount
+            )
+
+            //  In this example, the message and threshold pubkey are known
+            // before nonce generation, so they can be passed into the nonce
+            // generation function as a defense-in-depth measure to protect
+            // against nonce reuse.
+            //
+            // If these values are not known when nonce_gen is called, empty
+            // byte arrays can be passed in for the corresponding arguments
+            // instead.
+            val message = Random.secure().nextBytes(32)
+            val v = Random.secure().nextInt(4)
+
+            val tweaks = (0 until v).map {
+                ByteVector32(
+                    Random.secure().nextBytes(32)
+                )
+            }
+            val tweaksModes = (0 until v).map { Random.secure().nextBoolean() }
+
+            testSignAndVerify(
+                iteration = iteration,
+                n = n,
+                t = t,
+                frostTrustedDealership = frostTrustedDealership,
+                signerCount = signerCount,
+                signerIndices = signerIndices,
+                message = message,
+                tweaks = tweaks,
+                tweaksModes = tweaksModes
+            )
+        }
+    }
+
+    @Test
+    fun `extra sign and verify vectors`() {
+        val testData = TestHelpers.readResourceAsJson("vectors/extra_vectors.json")
+
+        for (validTestCase in testData.jsonObject["valid_test_cases"]!!.jsonArray) {
+
+            val iteration = validTestCase.jsonObject["iteration"]!!.jsonPrimitive.int
+            val n = validTestCase.jsonObject["n"]!!.jsonPrimitive.int
+            val t = validTestCase.jsonObject["t"]!!.jsonPrimitive.int
+            val signerCount = validTestCase.jsonObject["signer_count"]!!.jsonPrimitive.int
+
+            val signerIndices = validTestCase.jsonObject["signer_indices"]!!.jsonArray.map { jsonElement ->
+                jsonElement.jsonPrimitive.int
+            }
+
+            val publicShares = validTestCase.jsonObject["public_shares"]!!.jsonArray.map { jsonElement ->
+                PublicKey(Hex.decode(jsonElement.jsonPrimitive.content))
+            }
+
+            val secretShares = validTestCase.jsonObject["secret_shares"]!!.jsonArray.map { jsonElement ->
+                ByteVector32(Hex.decode(jsonElement.jsonPrimitive.content))
+            }
+
+            val thresholdPublicKey = PublicKey(
+                validTestCase.getValue("threshold_pk")
+            )
+
+            val tweaks = validTestCase.jsonObject["tweaks"]!!.jsonArray.map { jsonElement ->
+                ByteVector32(Hex.decode(jsonElement.jsonPrimitive.content))
+            }
+            val tweakModesTemp = validTestCase.jsonObject["tweak_modes"]!!.jsonArray.map { jsonElement ->
+                jsonElement.jsonPrimitive.boolean
+            }
+
+            val message = Hex.decode(validTestCase.jsonObject["message"]!!.jsonPrimitive.content)
+
+
+            testSignAndVerify(
+                iteration = iteration,
+                n = n,
+                t = t,
+                frostTrustedDealership = FrostTrustedDealership(
+                    thresholdPublicKey = thresholdPublicKey,
+                    secretShares = secretShares,
+                    publicShares = publicShares,
+                    identifiers = publicShares.indices.toList()
+                ),
+                tweaks = tweaks,
+                tweaksModes = tweakModesTemp,
+                message = message,
+                signerCount = signerCount,
+                signerIndices = signerIndices
             )
         }
     }

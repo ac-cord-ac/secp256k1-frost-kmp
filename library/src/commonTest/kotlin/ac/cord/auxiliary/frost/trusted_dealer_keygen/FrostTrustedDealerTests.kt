@@ -3,6 +3,7 @@ package ac.cord.auxiliary.frost.trusted_dealer_keygen
 import ac.cord.auxiliary.cryptography.GroupElement
 import ac.cord.auxiliary.cryptography.Scalar
 import com.ionspin.kotlin.bignum.integer.BigInteger
+import fr.acinq.bitcoin.ByteVector32
 import fr.acinq.lightning.utils.secure
 import fr.acinq.secp256k1.Hex
 import kotlin.random.Random
@@ -106,7 +107,9 @@ class FrostTrustedDealerTests {
 
     @Test
     fun `test trusted dealer keygen`() {
-        val thresholdSecretKeyBytes = Random.secure().nextBytes(32)
+        val thresholdSecretKeyBytes = ByteVector32(
+            Random.secure().nextBytes(32)
+        )
         val n = 5
         val t = 3
 
@@ -116,7 +119,7 @@ class FrostTrustedDealerTests {
             thresholdSecretBytes = thresholdSecretKeyBytes
         )
 
-        val thresholdSecretKey = Scalar.fromBytesNonZeroChecked(thresholdSecretKeyBytes)
+        val thresholdSecretKey = Scalar.fromBytesNonZeroChecked(thresholdSecretKeyBytes.toByteArray())
         val thresholdPublicKey = GroupElement.fromCompressedBytes(frostTrustedDealership.thresholdPublicKey)
         val secretShares = frostTrustedDealership.secretShares.map { Scalar.fromBytesNonZeroChecked(it.toByteArray()) }
         val publicShares = frostTrustedDealership.publicShares.map { GroupElement.fromCompressedBytes(it) }
