@@ -2,6 +2,7 @@ package ac.cord.auxiliary.frost.trusted_dealer_keygen
 
 import ac.cord.auxiliary.cryptography.GroupElement
 import ac.cord.auxiliary.cryptography.Scalar
+import ac.cord.auxiliary.frost.Frost
 import co.touchlab.kermit.Logger
 import com.ionspin.kotlin.bignum.integer.BigInteger
 import fr.acinq.lightning.utils.secure
@@ -54,7 +55,7 @@ object FrostTrustedDealer {
         )
     }
 
-    private fun secretShareShard(secret: Scalar, coefficients: List<Scalar>, n: Int): List<Scalar> {
+    internal fun secretShareShard(secret: Scalar, coefficients: List<Scalar>, n: Int): List<Scalar> {
         val coefficientsWithSecret = coefficients + listOf(secret)
 
         val secretShares = mutableListOf<Scalar>()
@@ -77,9 +78,29 @@ object FrostTrustedDealer {
         return secretShares
     }
 
-    private fun polynomialEvaluate(coefficientsWithSecret: List<Scalar>, x: Scalar): Scalar {
+    internal fun secretShareCombine(
+        secretShares: List<Scalar>,
+        identifiers: List<Int>
+    ): Scalar {
+       require(secretShares.size == identifiers.size)
+       
+       val secret = Scalar(BigInteger.ZERO)
+       
+       return secretShares.zip(identifiers).map { (secretShare, identifier) ->
+           val lam = Frost.deriveInterpolatingValue(
+               identifiers,
+               identifier
+           )
+
+           secretShare.times(lam)
+       }.reduce { accumulatedSecret: Scalar, interpolatedSecretShare: Scalar ->
+           accumulatedSecret.plus(interpolatedSecretShare)
+       }
+    }
+
+    internal fun polynomialEvaluate(coefficientsWithSecret: List<Scalar>, x: Scalar): Scalar {
         return coefficientsWithSecret.reduce { result, coefficient ->
-            return result.times(x).plus(coefficient)
+            result.times(x).plus(coefficient)
         }
     }
 }

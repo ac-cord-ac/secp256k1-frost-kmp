@@ -8,6 +8,7 @@ import ac.cord.auxiliary.extensions.getErrorDetails
 import ac.cord.auxiliary.extensions.getValue
 import ac.cord.auxiliary.extensions.getValueOrNull
 import ac.cord.auxiliary.extensions.testThrowable
+import ac.cord.auxiliary.frost.trusted_dealer_keygen.FrostTrustedDealer
 import co.touchlab.kermit.Logger
 import fr.acinq.bitcoin.ByteVector32
 import fr.acinq.bitcoin.PublicKey
