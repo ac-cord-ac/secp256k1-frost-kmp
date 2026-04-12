@@ -2,7 +2,6 @@ package ac.cord.auxiliary.frost
 
 import ac.cord.auxiliary.TestHelpers
 import ac.cord.auxiliary.cryptography.GroupElement
-import ac.cord.auxiliary.cryptography.to32LengthByteArray
 import ac.cord.auxiliary.cryptography.toBigInteger
 import ac.cord.auxiliary.exceptions.InvalidContributionException
 import ac.cord.auxiliary.extensions.getErrorDetails
@@ -35,7 +34,7 @@ class FrostTests {
         for (validTestCase in validTestCases) {
             val maxParticipants = validTestCase.jsonObject["max_participants"]!!.jsonPrimitive.int
             val minParticipants = validTestCase.jsonObject["min_participants"]!!.jsonPrimitive.int
-            val groupPublicKey = PublicKey(
+            val thresholdPublicKey = PublicKey(
                 Hex.decode(validTestCase.jsonObject["group_public_key"]!!.jsonPrimitive.content)
             )
 
@@ -57,10 +56,10 @@ class FrostTests {
                 Frost.checkPubSharesCorrectness(secretShares, publicShares)
             )
             assertTrue(
-                Frost.checkGroupPublicKeyCorrectness(
+                Frost.checkThresholdPublicKeyCorrectness(
                     maxParticipants,
                     minParticipants,
-                    groupPublicKey,
+                    thresholdPublicKey,
                     identifiers,
                     secretShares,
                     publicShares
@@ -88,12 +87,12 @@ class FrostTests {
             )
         }
 
-        val groupPublicKeyFailureTestCases =
+        val thresholdPublicKeyFailureTestCases =
             tests.jsonObject["group_pubkey_correctness_fail_test_cases"]!!.jsonArray
-        for (failureTestCase in groupPublicKeyFailureTestCases) {
+        for (failureTestCase in thresholdPublicKeyFailureTestCases) {
             val maxParticipants = failureTestCase.jsonObject["max_participants"]!!.jsonPrimitive.int
             val minParticipants = failureTestCase.jsonObject["min_participants"]!!.jsonPrimitive.int
-            val groupPublicKey = PublicKey(
+            val thresholdPublicKey = PublicKey(
                 Hex.decode(failureTestCase.jsonObject["group_public_key"]!!.jsonPrimitive.content)
             )
 
@@ -113,10 +112,10 @@ class FrostTests {
                 }
 
             assertFalse(
-                Frost.checkGroupPublicKeyCorrectness(
+                Frost.checkThresholdPublicKeyCorrectness(
                     maxParticipants,
                     minParticipants,
-                    groupPublicKey,
+                    thresholdPublicKey,
                     identifiers,
                     secretShares,
                     publicShares
@@ -138,7 +137,7 @@ class FrostTests {
             val secretShare = testCase.getValueOrNull("secshare")
             val publicShare = testCase.getValueOrNull("pubshare")?.let { PublicKey(it) }
 
-            val groupPublicKey = testCase.getValueOrNull("threshold_pubkey")?.let {
+            val thresholdPublicKey = testCase.getValueOrNull("threshold_pubkey")?.let {
                 XonlyPublicKey(
                     ByteVector32(it)
                 )
@@ -154,7 +153,7 @@ class FrostTests {
                 rand_ = rand_,
                 secretShare = secretShare,
                 publicShare = publicShare,
-                groupPublicKey = groupPublicKey,
+                thresholdPublicKey = thresholdPublicKey,
                 message = message,
                 extraIn = extraIn ?: byteArrayOf()
             )
@@ -244,7 +243,7 @@ class FrostTests {
         )
 
 
-        val groupPublicKey = PublicKey(
+        val thresholdPublicKey = PublicKey(
             testData.getValue("threshold_pubkey")
         )
 
@@ -312,7 +311,7 @@ class FrostTests {
                 t = t,
                 identifiers = identifiersTemp,
                 publicShares = pubicSharesTemp,
-                groupPublicKey = groupPublicKey
+                thresholdPublicKey = thresholdPublicKey
             )
             val frostSessionContext = FrostSessionContext(
                 frostSignersContext = frostSignersContext,
@@ -382,7 +381,7 @@ class FrostTests {
                     t = t,
                     identifiers = identifiersTemp,
                     publicShares = pubicSharesTemp,
-                    groupPublicKey = groupPublicKey
+                    thresholdPublicKey = thresholdPublicKey
                 ),
                 aggregateNonceTemp,
                 listOf(),
@@ -436,7 +435,7 @@ class FrostTests {
                         t = t,
                         identifiers = identifiersTemp,
                         publicShares = pubicSharesTemp,
-                        groupPublicKey = groupPublicKey
+                        thresholdPublicKey = thresholdPublicKey
                     ),
                     tweaks = listOf(),
                     isXonlies = listOf(),
@@ -480,7 +479,7 @@ class FrostTests {
                         t = t,
                         identifiers = identifiersTemp,
                         publicShares = pubicSharesTemp,
-                        groupPublicKey = groupPublicKey
+                        thresholdPublicKey = thresholdPublicKey
                     ),
                     tweaks = listOf(),
                     isXonlies = listOf(),
@@ -518,7 +517,7 @@ class FrostTests {
             Frost.individualPublicKey(secretShareP1)
         )
 
-        val groupPublicKey = PublicKey(
+        val thresholdPublicKey = PublicKey(
             testData.getValue("threshold_pubkey")
         )
 
@@ -595,7 +594,7 @@ class FrostTests {
                     t = t,
                     identifiers = identifiersTemp,
                     publicShares = pubicSharesTemp,
-                    groupPublicKey = groupPublicKey
+                    thresholdPublicKey = thresholdPublicKey
                 ),
                 aggregateNonceTemp,
                 tweaksTemp,
@@ -627,7 +626,7 @@ class FrostTests {
                         t = t,
                         identifiers = identifiersTemp,
                         publicShares = pubicSharesTemp,
-                        groupPublicKey = groupPublicKey
+                        thresholdPublicKey = thresholdPublicKey
                     ),
                     tweaks = tweaksTemp,
                     isXonlies = tweakModesTemp,
@@ -670,7 +669,7 @@ class FrostTests {
                 t = t,
                 identifiers = identifiersTemp,
                 publicShares = pubicSharesTemp,
-                groupPublicKey = groupPublicKey
+                thresholdPublicKey = thresholdPublicKey
             ),
                 aggregateNonceTemp,
                 tweaksTemp,
@@ -715,7 +714,7 @@ class FrostTests {
         )
 
 
-        val groupPublicKey = PublicKey(
+        val thresholdPublicKey = PublicKey(
             testData.getValue("threshold_pubkey")
         )
 
@@ -769,7 +768,7 @@ class FrostTests {
                 t = t,
                 identifiers = identifiersTemp,
                 publicShares = pubicSharesTemp,
-                groupPublicKey = groupPublicKey
+                thresholdPublicKey = thresholdPublicKey
             )
 
             val (publicNonce, partialSignature) = Frost.deterministicSign(
@@ -863,7 +862,7 @@ class FrostTests {
                 t = t,
                 identifiers = identifiersTemp,
                 publicShares = pubicSharesTemp,
-                groupPublicKey = groupPublicKey
+                thresholdPublicKey = thresholdPublicKey
             )
 
             val throwable = assertFailsWith<Throwable> {
@@ -901,7 +900,7 @@ class FrostTests {
             PublicKey(Hex.decode(jsonElement.jsonPrimitive.content))
         }
 
-        val groupPublicKey = PublicKey(
+        val thresholdPublicKey = PublicKey(
             testData.getValue("threshold_pubkey")
         )
 
@@ -963,7 +962,7 @@ class FrostTests {
                     t = t,
                     identifiers = identifiersTemp,
                     publicShares = pubicSharesTemp,
-                    groupPublicKey = groupPublicKey
+                    thresholdPublicKey = thresholdPublicKey
                 ),
                 aggregateNonceTemp,
                 tweaksTemp,
@@ -979,17 +978,17 @@ class FrostTests {
                 expected,
                 signature
             )
-            val tweakContext = Frost.groupPublicKeyAndTweet(
+            val tweakContext = Frost.thresholdPublicKeyAndTweak(
                 pubicSharesTemp,
                 identifiersTemp,
                 tweaksTemp,
                 tweakModesTemp
             )
-            val tweakedGroupPublicKey = tweakContext.getXonlyPublicKey()
+            val tweakedThresholdPublicKey = tweakContext.getXonlyPublicKey()
 
             assertTrue(
                 Secp256k1.verifySchnorr(
-                    pub = tweakedGroupPublicKey.value.toByteArray(),
+                    pub = tweakedThresholdPublicKey.value.toByteArray(),
                     data = message,
                     signature = signature,
                 ),
@@ -1036,7 +1035,7 @@ class FrostTests {
                     t = t,
                     identifiers = identifiersTemp,
                     publicShares = pubicSharesTemp,
-                    groupPublicKey = groupPublicKey
+                    thresholdPublicKey = thresholdPublicKey
                 ),
                 aggregateNonceTemp,
                 tweaksTemp,

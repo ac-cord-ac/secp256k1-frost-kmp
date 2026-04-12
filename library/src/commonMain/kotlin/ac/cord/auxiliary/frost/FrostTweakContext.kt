@@ -1,10 +1,7 @@
 package ac.cord.auxiliary.frost
 
-import ac.cord.auxiliary.cryptography.CryptographicConstants
-import ac.cord.auxiliary.cryptography.CryptographicConstants.n
 import ac.cord.auxiliary.cryptography.GroupElement
 import ac.cord.auxiliary.cryptography.Scalar
-import ac.cord.auxiliary.cryptography.toBigInteger
 import co.touchlab.kermit.Logger
 import com.ionspin.kotlin.bignum.integer.BigInteger
 import fr.acinq.bitcoin.ByteVector32
@@ -18,8 +15,8 @@ data class FrostTweakContext(
 ) {
     val logger = Logger.withTag("FrostTweakContext")
 
-    constructor(groupPublicKey: PublicKey): this(
-        Q = GroupElement.fromCompressedBytes(groupPublicKey),
+    constructor(thresholdPublicKey: PublicKey): this(
+        Q = GroupElement.fromCompressedBytes(thresholdPublicKey),
         gacc = Scalar(BigInteger.ONE),
         tacc = Scalar(BigInteger.ZERO)
     )

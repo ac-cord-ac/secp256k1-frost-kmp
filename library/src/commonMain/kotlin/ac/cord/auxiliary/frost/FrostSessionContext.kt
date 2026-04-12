@@ -46,7 +46,7 @@ data class FrostSessionContext(
     fun getSessionValues(): SessionValues {
         frostSignersContext.validateSignersContext()
 
-        val tweakContext = Frost.groupPublicKeyAndTweet(frostSignersContext.publicShares, frostSignersContext.identifiers, tweaks, isXonlies)
+        val tweakContext = Frost.thresholdPublicKeyAndTweak(frostSignersContext.publicShares, frostSignersContext.identifiers, tweaks, isXonlies)
 
 
         val sortedIdentifiers = frostSignersContext.identifiers.map {

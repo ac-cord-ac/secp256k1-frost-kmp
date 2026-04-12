@@ -32,14 +32,14 @@ object Frost {
     fun nonceHash(
         rand: ByteArray,
         publicShare: PublicKey?,
-        groupPublicKey: XonlyPublicKey?,
+        thresholdPublicKey: XonlyPublicKey?,
         index: Int,
         messagePrefixed: ByteArray,
         extraIn: ByteArray
     ): BigInteger {
         val buffer = rand +
             (publicShare?.let { publicShare.value.size().toSingleByteByteArray() + publicShare.value.toByteArray() }  ?: 0.toSingleByteByteArray()) +
-            (groupPublicKey?.let { groupPublicKey.value.size().toSingleByteByteArray() + groupPublicKey.value.toByteArray() } ?: 0.toSingleByteByteArray()) +
+            (thresholdPublicKey?.let { thresholdPublicKey.value.size().toSingleByteByteArray() + thresholdPublicKey.value.toByteArray() } ?: 0.toSingleByteByteArray()) +
             messagePrefixed +
             extraIn.size.to4LengthByteArray() + extraIn +
             byteArrayOf(index.toByte())
@@ -57,7 +57,7 @@ object Frost {
         rand_: ByteArray,
         secretShare: ByteArray?,
         publicShare: PublicKey?,
-        groupPublicKey: XonlyPublicKey?,
+        thresholdPublicKey: XonlyPublicKey?,
         message: ByteArray?,
         extraIn: ByteArray = byteArrayOf()
     ): Pair<FrostSecretNonce, FrostPublicNonce> {
@@ -70,7 +70,7 @@ object Frost {
         val k1 = nonceHash(
             rand,
             publicShare,
-            groupPublicKey,
+            thresholdPublicKey,
             0,
             messagePrefixed,
             extraIn
@@ -78,7 +78,7 @@ object Frost {
         val k2 = nonceHash(
             rand,
             publicShare,
-            groupPublicKey,
+            thresholdPublicKey,
             1,
             messagePrefixed,
             extraIn
@@ -106,7 +106,7 @@ object Frost {
         )
     }
 
-    fun nonceGen(secretShare: ByteArray?, publicShare: PublicKey?, groupPublicKey: XonlyPublicKey?, message: ByteArray?, extraIn: ByteArray?): Pair<FrostSecretNonce, FrostPublicNonce> {
+    fun nonceGen(secretShare: ByteArray?, publicShare: PublicKey?, thresholdPublicKey: XonlyPublicKey?, message: ByteArray?, extraIn: ByteArray?): Pair<FrostSecretNonce, FrostPublicNonce> {
 
         if (secretShare != null && secretShare.size != 32) {
             throw IllegalArgumentException("The optional byte array secshare must have length 32.")
@@ -117,7 +117,7 @@ object Frost {
             rand_ = rand_,
             secretShare = secretShare,
             publicShare = publicShare,
-            groupPublicKey = groupPublicKey ,
+            thresholdPublicKey = thresholdPublicKey ,
             message = message,
             extraIn = extraIn ?: byteArrayOf()
         )
@@ -182,7 +182,7 @@ object Frost {
         return numerator.divide(denominator)
     }
 
-    fun deriveGroupPublicKey(
+    fun deriveThresholdPublicKey(
         publicShares: List<PublicKey>,
         identifiers: List<Int>
     ): PublicKey {
@@ -214,7 +214,7 @@ object Frost {
         return Q.toCompressedBytes()
     }
 
-    fun groupPublicKeyAndTweet(
+    fun thresholdPublicKeyAndTweak(
         publicShares: List<PublicKey>,
         ids: List<Int>,
         tweaks: List<ByteVector32>,
@@ -224,16 +224,16 @@ object Frost {
             throw IllegalArgumentException("The pubshares and ids arrays must have the same length.")
         }
 
-        val groupPublicKey = deriveGroupPublicKey(publicShares, ids)
-        return groupPublicKeyAndTweet(
-            groupPublicKey = groupPublicKey,
+        val thresholdPublicKey = deriveThresholdPublicKey(publicShares, ids)
+        return thresholdPublicKeyAndTweak(
+            thresholdPublicKey = thresholdPublicKey,
             tweaks = tweaks,
             isXonlies = isXonlies
         )
     }
 
-    fun groupPublicKeyAndTweet(
-        groupPublicKey: PublicKey,
+    fun thresholdPublicKeyAndTweak(
+        thresholdPublicKey: PublicKey,
         tweaks: List<ByteVector32>,
         isXonlies: List<Boolean>
     ): FrostTweakContext {
@@ -241,7 +241,7 @@ object Frost {
             throw IllegalArgumentException("The tweaks and is_xonly arrays must have the same length.")
         }
 
-        var frostTweakContext = FrostTweakContext(groupPublicKey)
+        var frostTweakContext = FrostTweakContext(thresholdPublicKey)
 
         tweaks.zip(isXonlies).forEach { (tweak, isXonly) ->
             frostTweakContext = frostTweakContext.applyTweak(
@@ -314,20 +314,20 @@ object Frost {
 
         frostSignersContext.validateSignersContext()
 
-        val tweakedGroupPublicKey = groupPublicKeyAndTweet(
-            groupPublicKey = frostSignersContext.groupPublicKey,
+        val tweakedThresholdPublicKey = thresholdPublicKeyAndTweak(
+            thresholdPublicKey = frostSignersContext.thresholdPublicKey,
             tweaks = tweaks,
             isXonlies = isXonlies
         ).getXonlyPublicKey()
 
         val k_1 = Scalar.fromBytesWrapping(
             deterministicNonceHash(
-                secShare_, aggothernonce.value, tweakedGroupPublicKey, message, 0
+                secShare_, aggothernonce.value, tweakedThresholdPublicKey, message, 0
             )
         )
         val k_2 = Scalar.fromBytesWrapping(
             deterministicNonceHash(
-                secShare_, aggothernonce.value, tweakedGroupPublicKey, message, 1
+                secShare_, aggothernonce.value, tweakedThresholdPublicKey, message, 1
             )
         )
 
@@ -375,9 +375,9 @@ object Frost {
         )
     }
 
-    fun deterministicNonceHash(secretShare: ByteArray, aggothernonce: ByteArray, tweakedGroupPublicKey: XonlyPublicKey, message: ByteArray, index: Int): ByteArray {
+    fun deterministicNonceHash(secretShare: ByteArray, aggothernonce: ByteArray, tweakedThresholdPublicKey: XonlyPublicKey, message: ByteArray, index: Int): ByteArray {
 
-        val buffer = secretShare + aggothernonce + tweakedGroupPublicKey.value.toByteArray()  +
+        val buffer = secretShare + aggothernonce + tweakedThresholdPublicKey.value.toByteArray()  +
                 message.size.to8LengthByteArray() + message +
                 byteArrayOf(index.toByte())
 
@@ -414,10 +414,10 @@ object Frost {
         return true
     }
 
-    fun checkGroupPublicKeyCorrectness(
+    fun checkThresholdPublicKeyCorrectness(
         maxParticipants: Int,
         minParticipants: Int,
-        groupPublicKey: PublicKey,
+        thresholdPublicKey: PublicKey,
         identifiers: List<Int>,
         secretShares: List<ByteArray>,
         publicShares: List<PublicKey>
@@ -447,8 +447,8 @@ object Frost {
                     groupSecretKey += lambdaI.times(secretShareI).toBigInteger()
                 }
                 val groupSecretKeyBytes = groupSecretKey.mod(CryptographicConstants.n).toByteArray()
-                val computedGroupPublicKey = individualPublicKey(groupSecretKeyBytes)
-                if (computedGroupPublicKey != groupPublicKey) {
+                val computedThresholdPublicKey = individualPublicKey(groupSecretKeyBytes)
+                if (computedThresholdPublicKey != thresholdPublicKey) {
                     return false
                 }
             }

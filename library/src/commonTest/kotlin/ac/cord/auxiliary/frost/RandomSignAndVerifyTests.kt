@@ -1,6 +1,5 @@
 package ac.cord.auxiliary.frost
 
-import ac.cord.auxiliary.cryptography.GroupElement
 import ac.cord.auxiliary.frost.trusted_dealer_keygen.FrostTrustedDealer
 import ac.cord.auxiliary.frost.trusted_dealer_keygen.FrostTrustedDealership
 import co.touchlab.kermit.Logger
@@ -39,7 +38,7 @@ class RandomSignAndVerifyTests {
     @OptIn(ExperimentalTime::class)
     @Test
     fun `test sign and verify random`() {
-        val iteration = 2
+        val iteration = 0
 
         val n = Random.secure().nextInt(2, 11)
         logger.d("n: $n")
@@ -69,12 +68,20 @@ class RandomSignAndVerifyTests {
             t = t,
             identifiers = signerIdentifiers,
             publicShares = signerPublicShares,
-            groupPublicKey = frostTrustedDealership.thresholdPublicKey
+            thresholdPublicKey = frostTrustedDealership.thresholdPublicKey
         )
 
+        //  In this example, the message and threshold pubkey are known
+        // before nonce generation, so they can be passed into the nonce
+        // generation function as a defense-in-depth measure to protect
+        // against nonce reuse.
+        //
+        // If these values are not known when nonce_gen is called, empty
+        // byte arrays can be passed in for the corresponding arguments
+        // instead.
         val message = Random.secure().nextBytes(32)
-        val v = Random.secure().nextInt(0, 4)
-        print("v: $v")
+        val v = Random.secure().nextInt(4)
+        logger.d("v: $v")
         val tweaks = IntRange(0, v-1).map {
             ByteVector32(
                 Random.secure().nextBytes(32)
@@ -82,7 +89,7 @@ class RandomSignAndVerifyTests {
         }
         val tweaksModes = IntRange(0, v-1).map { Random.secure().nextBoolean() }
 
-        val tweakedThresholdPublicKey = Frost.groupPublicKeyAndTweet(
+        val tweakedThresholdPublicKey = Frost.thresholdPublicKeyAndTweak(
             frostTrustedDealership.thresholdPublicKey,
             tweaks,
             isXonlies = tweaksModes
@@ -97,7 +104,7 @@ class RandomSignAndVerifyTests {
             val (frostSecretNonce, publicNonce) = Frost.nonceGen(
                 secretShare = signerSecretShares[index],
                 publicShare = signerPublicShares[index],
-                groupPublicKey = tweakedThresholdPublicKey,
+                thresholdPublicKey = tweakedThresholdPublicKey,
                 message = message,
                 timestamp.toEpochMilliseconds().toBigInteger().toByteArray()
             )

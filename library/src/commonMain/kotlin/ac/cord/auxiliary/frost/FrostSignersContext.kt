@@ -1,20 +1,17 @@
 package ac.cord.auxiliary.frost
 
 import ac.cord.auxiliary.cryptography.GroupElement
-import ac.cord.auxiliary.cryptography.toBigInteger
 import ac.cord.auxiliary.exceptions.InvalidContributionException
 import co.touchlab.kermit.Logger
 import com.ionspin.kotlin.bignum.integer.toBigInteger
-import fr.acinq.bitcoin.ByteVector32
 import fr.acinq.bitcoin.PublicKey
-import fr.acinq.bitcoin.XonlyPublicKey
 
 data class FrostSignersContext(
     val n: Int,
     val t: Int,
     val identifiers: List<Int>,
     val publicShares: List<PublicKey>,
-    val groupPublicKey: PublicKey
+    val thresholdPublicKey: PublicKey
 ) {
     val logger = Logger.withTag("FrostSignersContext")
     fun validateSignersContext() {
@@ -42,7 +39,7 @@ data class FrostSignersContext(
             throw IllegalArgumentException("The participant identifier list contains duplicate elements.")
         }
 
-        if (deriveThresholdPublicKey() != groupPublicKey) {
+        if (deriveThresholdPublicKey() != thresholdPublicKey) {
             throw IllegalArgumentException("The provided key material is incorrect.")
         }
     }
