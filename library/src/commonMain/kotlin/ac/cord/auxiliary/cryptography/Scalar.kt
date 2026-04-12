@@ -140,16 +140,26 @@ class Scalar(
         }
 
         fun fromBytesChecked(bytes: ByteArray): Scalar {
-            val v = bytes.toBigInteger()
+            return fromBigIntegerChecked(
+                bytes.toBigInteger()
+            )
+        }
 
+        fun fromBigIntegerChecked(other: BigInteger): Scalar {
             return Scalar(
-                v
+                other
             )
         }
 
         fun fromBytesWrapping(other: ByteArray): Scalar {
+            return fromBigIntegerWrapping(
+                other.toBigInteger()
+            )
+        }
+
+        fun fromBigIntegerWrapping(other: BigInteger): Scalar {
             return Scalar(
-                other.toBigInteger().mod(SIZE)
+                other.mod(SIZE)
             )
         }
     }

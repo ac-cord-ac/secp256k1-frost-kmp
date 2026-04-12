@@ -143,10 +143,26 @@ class FieldElement(
         ).minus(977)
 
         fun fromBytesChecked(bytes: ByteArray): FieldElement {
-            val v = bytes.toBigInteger()
+            return fromBigIntegerChecked(
+                bytes.toBigInteger()
+            )
+        }
 
+        fun fromBigIntegerChecked(other: BigInteger): FieldElement {
             return FieldElement(
-                v
+                other
+            )
+        }
+
+        fun fromBytesWrapping(other: ByteArray): FieldElement {
+            return fromBigIntegerWrapping(
+                other.toBigInteger()
+            )
+        }
+
+        fun fromBigIntegerWrapping(other: BigInteger): FieldElement {
+            return FieldElement(
+                other.mod(SIZE)
             )
         }
     }
