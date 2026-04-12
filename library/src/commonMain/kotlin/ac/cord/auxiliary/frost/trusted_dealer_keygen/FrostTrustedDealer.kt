@@ -13,14 +13,14 @@ object FrostTrustedDealer {
     val logger = Logger.withTag("FrostTrustedDealer")
 
     fun keyGen(
-        thresholdSecretBytes: ByteArray,
+        thresholdSecretBytes: ByteVector32,
         n: Int,
         t: Int
     ): FrostTrustedDealership {
         require(t in 2..n) { "threshold needs to be between 2 and n" }
 
         val thresholdSecret = Scalar.fromBytesNonZeroChecked(
-            thresholdSecretBytes
+            thresholdSecretBytes.toByteArray()
         )
         val thresholdPublicKeyGroupElement = GroupElement.GENERATOR_POINT.mul(thresholdSecret.toBigInteger())
 
@@ -29,7 +29,7 @@ object FrostTrustedDealer {
         val thresholdPublicKey = thresholdPublicKeyGroupElement.toCompressedBytes()
 
         val coefficients = mutableListOf<Scalar>()
-        for (i in 0 until t) {
+        repeat(t-1) {
             coefficients.add(
                 Scalar.fromBytesNonZeroChecked(
                     Random.secure().nextBytes(32)
@@ -71,7 +71,6 @@ object FrostTrustedDealer {
                 coefficientsWithSecret,
                 x
             )
-            logger.d("y: $y")
 
             require(y.toBigInteger() != BigInteger.ZERO)
 
