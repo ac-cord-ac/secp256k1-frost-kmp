@@ -311,7 +311,6 @@ object Frost {
             rand, secretShare
         )
 
-        logger.d("secShare: ${secShare_.toHexString()}" )
         frostSignersContext.validateSignersContext()
 
         val tweakedGroupPublicKey = groupPublicKeyAndTweet(
@@ -319,28 +318,23 @@ object Frost {
             tweaks = tweaks,
             isXonlies = isXonlies
         ).getXonlyPublicKey()
-        logger.d("tweaked_tpk: $tweakedGroupPublicKey")
 
         val k_1 = Scalar.fromBytesWrapping(
             deterministicNonceHash(
                 secShare_, aggothernonce.value, tweakedGroupPublicKey, message, 0
             )
         )
-        logger.d("k_1: $k_1")
         val k_2 = Scalar.fromBytesWrapping(
             deterministicNonceHash(
                 secShare_, aggothernonce.value, tweakedGroupPublicKey, message, 1
             )
         )
-        logger.d("k_2: $k_2")
 
         require(k_1.toBigInteger() != BigInteger.ZERO)
         require(k_2.toBigInteger() != BigInteger.ZERO)
 
         val R_s1 = GroupElement.GENERATOR_POINT.mul(k_1.toBigInteger())
-        logger.d("R_s1: $R_s1")
         val R_s2 = GroupElement.GENERATOR_POINT.mul(k_2.toBigInteger())
-        logger.d("R_s2: $R_s2")
 
 
         require(!R_s1.isInfinity) { "deterministicSign R_s1 can't be infinity" }
@@ -349,11 +343,9 @@ object Frost {
         val frostPublicNonce = FrostPublicNonce(
             R_s1.toCompressedBytes().value.toByteArray() + R_s2.toCompressedBytes().value.toByteArray()
         )
-        logger.d("pubnonce: ${frostPublicNonce.value.toHexString()}" )
         val frostSecretNonce = FrostSecretNonce(
             k_1.toByteArray() + k_2.toByteArray()
         )
-        logger.d("secnonce :${frostSecretNonce.getSecretNonce().toHexString()}")
 
         val aggregateNonce = try {
             nonceAgg(
@@ -362,7 +354,6 @@ object Frost {
         } catch (e: Throwable) {
             throw InvalidContributionException(null, "aggothernonce", e)
         }
-        logger.d("aggnonce: ${aggregateNonce.toHexString()}")
 
         val frostSessionContext = FrostSessionContext(
             frostSignersContext = frostSignersContext,
@@ -376,7 +367,6 @@ object Frost {
             secretShare,
             my_id,
         )
-        logger.d("psig: ${partialSignature.value.toByteArray().toHexString()}")
 
         return Pair(
             frostPublicNonce,
@@ -390,7 +380,6 @@ object Frost {
                 message.size.to8LengthByteArray() + message +
                 byteArrayOf(index.toByte())
 
-        logger.d("buf: ${buffer.toHexString()}")
         return taggedHash("FROST/deterministic/nonce", buffer)
     }
 
