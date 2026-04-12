@@ -6,8 +6,12 @@ import ac.cord.auxiliary.frost.trusted_dealer_keygen.FrostTrustedDealership
 import co.touchlab.kermit.Logger
 import com.ionspin.kotlin.bignum.integer.toBigInteger
 import fr.acinq.bitcoin.ByteVector32
+import fr.acinq.secp256k1.Secp256k1
 import korlibs.crypto.SecureRandom
 import kotlin.test.Test
+import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 import kotlin.time.Clock
 import kotlin.time.ExperimentalTime
 
@@ -112,7 +116,7 @@ class RandomSignAndVerifyTests {
 
         // On even iterations use regular signing algorithm for the final signer,
         // otherwise use deterministic signing algorithm
-        val publicNonceFinal = if (iteration.mod(2) == 0) {
+        val (publicNonceFinal, partialSignatureFinal) = if (iteration.mod(2) == 0) {
             val timestamp = Clock.System.now()
 
             val (secretNonceFinal, publicNonceFinal) = Frost.nonceGen(
@@ -126,7 +130,10 @@ class RandomSignAndVerifyTests {
                 secretNonceFinal
             )
 
-            publicNonceFinal
+            Pair(
+                publicNonceFinal,
+                null
+            )
         } else {
             val aggOtherNonce = Frost.nonceAgg(
                 signerPublicNonces
@@ -144,13 +151,103 @@ class RandomSignAndVerifyTests {
                 rand = rand
             )
 
-            publicNonceFinal
+            Pair(
+                publicNonceFinal,
+                partialSignatureFinal
+            )
         }
 
         signerPublicNonces.add(
             publicNonceFinal
         )
 
+        val aggNonce = Frost.nonceAgg(
+            signerPublicNonces
+        )
 
+        val frostSessionContext = FrostSessionContext(
+            aggNonce = aggNonce,
+            frostSignersContext = frostSignerContext,
+            tweaks = tweaks,
+            isXonlies = tweaksModes,
+            message = message
+        )
+
+        val signerPartialSignatures = mutableListOf<FrostPartialSignature>()
+
+        IntRange(0, signerCount-1).forEach { index ->
+            logger.d("Index: $index")
+            val signerPartialSignature = if (iteration % 2 != 0 && index == signerCount-1) {
+                require(partialSignatureFinal != null) { "partialSignatureFinal shouldn't be null for this iteration" }
+                partialSignatureFinal
+            } else {
+                frostSessionContext.sign(
+                    signerSecretNonces[index],
+                    signerSecretShares[index],
+                    signerIdentifiers[index]
+                )
+            }
+
+            require(
+                Frost.partialSignatureVerify(
+                    frostPartialSignature = signerPartialSignature,
+                    frostPublicNonces = signerPublicNonces,
+                    frostSignersContext = frostSignerContext,
+                    tweaks = tweaks,
+                    isXonlies = tweaksModes,
+                    message = message,
+                    index = index
+                )
+            )
+
+            signerPartialSignatures.add(signerPartialSignature)
+        }
+
+        // An exception is thrown if secnonce is accidentally reused
+        val throwable = assertFailsWith<IllegalArgumentException> {
+            frostSessionContext.sign(
+                frostSecretNonce = signerSecretNonces.first(),
+                secretShare = signerSecretShares.first(),
+                my_id = signerIdentifiers.first(),
+            )
+        }
+
+        // Fail partial sig verify  at wrong index
+        assertFalse {
+            Frost.partialSignatureVerify(
+                frostPartialSignature = signerPartialSignatures[0],
+                frostPublicNonces = signerPublicNonces,
+                frostSignersContext = frostSignerContext,
+                tweaks = tweaks,
+                isXonlies = tweaksModes,
+                message = message,
+                index = 1
+            )
+        }
+
+        // Fail partial sig verify with wrong message...
+        assertFalse {
+            Frost.partialSignatureVerify(
+                frostPartialSignature = signerPartialSignatures[0],
+                frostPublicNonces = signerPublicNonces,
+                frostSignersContext = frostSignerContext,
+                tweaks = tweaks,
+                isXonlies = tweaksModes,
+                SecureRandom.nextBytes(32), // Random message...
+                0
+            )
+        }
+
+        val bip340Signature = frostSessionContext.partialSignatureAggregate(
+            signerPartialSignatures
+        )
+
+        assertTrue {
+            Secp256k1.verifySchnorr(
+                signature = bip340Signature,
+                data = message,
+                pub = tweakedThresholdPublicKey.value.toByteArray()
+            )
+        }
     }
 }
