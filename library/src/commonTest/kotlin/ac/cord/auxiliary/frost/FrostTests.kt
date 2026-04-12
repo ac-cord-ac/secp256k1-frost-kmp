@@ -1054,12 +1054,5 @@ class FrostTests {
     }
 
 
-    @Test
-    fun `test sign and verify random`() {
-        val maxParticipants = SecureRandom.nextInt(2, 11)
-        val minParticipants = SecureRandom.nextInt(2, maxParticipants+1)
 
-
-        // TODO: test_sign_and_verify_random
-    }
 }
