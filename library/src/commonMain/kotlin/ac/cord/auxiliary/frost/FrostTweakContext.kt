@@ -1,9 +1,7 @@
 package ac.cord.auxiliary.frost
 
-import ac.cord.auxiliary.cryptography.CryptographicConstants
-import ac.cord.auxiliary.cryptography.CryptographicConstants.n
-import ac.cord.auxiliary.cryptography.Point
-import ac.cord.auxiliary.cryptography.toBigInteger
+import ac.cord.auxiliary.cryptography.GroupElement
+import ac.cord.auxiliary.cryptography.Scalar
 import co.touchlab.kermit.Logger
 import com.ionspin.kotlin.bignum.integer.BigInteger
 import fr.acinq.bitcoin.ByteVector32
@@ -11,57 +9,58 @@ import fr.acinq.bitcoin.PublicKey
 import fr.acinq.bitcoin.XonlyPublicKey
 
 data class FrostTweakContext(
-    val Q: Point,
-    val gacc: BigInteger,
-    val tacc: BigInteger
+    val Q: GroupElement,
+    val gacc: Scalar,
+    val tacc: Scalar
 ) {
     val logger = Logger.withTag("FrostTweakContext")
 
-    constructor(groupPublicKey: PublicKey): this(
-        Q = Point.fromCompressedBytes(groupPublicKey.value.toByteArray()),
-        gacc = BigInteger.ONE,
-        tacc = BigInteger.ZERO
+    constructor(thresholdPublicKey: PublicKey): this(
+        Q = GroupElement.fromCompressedBytes(thresholdPublicKey),
+        gacc = Scalar(BigInteger.ONE),
+        tacc = Scalar(BigInteger.ZERO)
     )
 
     fun getXonlyPublicKey(): XonlyPublicKey {
-        return XonlyPublicKey(
-            ByteVector32(Q.xbytes())
-        )
+        return Q.toXonlyPublicKey()
     }
 
     fun getPlainPublicKey(): PublicKey {
-        return PublicKey(
-            Q.cbytes()
-        )
+        return Q.toCompressedBytes()
     }
 
-    private fun computeG(isXonly: Boolean): BigInteger {
-        return  if (isXonly && !Q.hasEvenY()) {
-            CryptographicConstants.n - 1
-        } else {
-            BigInteger.ONE
-        }
+    private fun computeG(isXonly: Boolean): Scalar {
+        return Scalar(
+            if (isXonly && !Q.hasEvenY()) {
+                BigInteger.ONE.negate()
+            } else {
+                BigInteger.ONE
+            }
+        )
     }
-    fun applyTweak(tweak: ByteVector32, isXonly: Boolean): FrostTweakContext {
+    fun applyTweak(tweakBytes: ByteVector32, isXonly: Boolean): FrostTweakContext {
 
         val g = computeG(isXonly)
 
-        val t = tweak.toByteArray().toBigInteger()
 
-        if (t >= CryptographicConstants.n) {
-            throw IllegalArgumentException("The tweak must be less than n.")
+        val tweak = try {
+            Scalar.fromBytesChecked(
+                tweakBytes.toByteArray()
+            )
+        } catch (e: Throwable) {
+            throw IllegalArgumentException("The tweak must be less than n.", e)
         }
 
-        val Q_ = Q.mul(g)?.add(
-            Point.G.mul(t)
+        val Q_ = Q.mul(g.toBigInteger()).add(
+            GroupElement.GENERATOR_POINT.mul(tweak.toBigInteger())
         )
-        if (Q_ == null) {
+
+        if (Q_.isInfinity) {
             throw IllegalStateException("The result of tweaking cannot be infinity.")
         }
 
-        val gacc_ = g.times(gacc).mod(n)
-
-        val tacc_ = t.plus(g.times(tacc)).mod(n)
+        val gacc_ = g.times(gacc)
+        val tacc_ = tweak.plus(g.times(tacc))
 
         return FrostTweakContext(
             Q_,

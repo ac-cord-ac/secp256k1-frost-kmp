@@ -34,7 +34,7 @@ kotlin {
     iosX64()
     iosArm64()
     iosSimulatorArm64()
-    linuxX64()
+//    linuxX64()
 
     sourceSets {
         commonMain.dependencies {
@@ -42,10 +42,9 @@ kotlin {
             implementation(libs.kermit)
             implementation("com.ionspin.kotlin:bignum:0.3.10")
             implementation("fr.acinq.secp256k1:secp256k1-kmp:0.23.0")
-            implementation("fr.acinq.bitcoin:bitcoin-kmp:0.30.0")
+            implementation("fr.acinq.lightning:lightning-kmp-core:1.11.5")
             implementation("com.squareup.okio:okio:3.16.2")
 
-            implementation("org.korge:korlibs-crypto:6.1.0")
         }
         commonTest.dependencies {
             implementation(libs.kotlin.test)

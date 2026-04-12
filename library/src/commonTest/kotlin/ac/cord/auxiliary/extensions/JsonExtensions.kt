@@ -24,7 +24,7 @@ fun JsonElement.getErrorDetails(key: String): Pair<KClass<out Throwable>, (Any) 
     val error = jsonObject[key]!!.jsonObject
 
     return when (error["type"]!!.jsonPrimitive.content)  {
-        "invalid_contribution" -> {
+        "InvalidContributionError" -> {
             Pair(
                 InvalidContributionException::class,
                 { e ->
@@ -32,9 +32,9 @@ fun JsonElement.getErrorDetails(key: String): Pair<KClass<out Throwable>, (Any) 
 
                     val contrib = error["contrib"]?.jsonPrimitive?.content
                     val match = if (contrib != null) {
-                        invalidContributionException?.signerId == error["signer_id"]?.jsonPrimitive?.intOrNull?.toBigInteger() && invalidContributionException?.contrib == contrib
+                        invalidContributionException?.signerId == error["signer_index"]?.jsonPrimitive?.intOrNull?.toBigInteger() && invalidContributionException?.contrib == contrib
                     } else {
-                        invalidContributionException?.signerId == error["signer_id"]?.jsonPrimitive?.intOrNull?.toBigInteger()
+                        invalidContributionException?.signerId == error["signer_index"]?.jsonPrimitive?.intOrNull?.toBigInteger()
                     }
 
                     if (!match) {
@@ -45,7 +45,7 @@ fun JsonElement.getErrorDetails(key: String): Pair<KClass<out Throwable>, (Any) 
             )
 
         }
-        "value" -> {
+        "ValueError" -> {
             Pair(
                 IllegalArgumentException::class,
                 { e ->

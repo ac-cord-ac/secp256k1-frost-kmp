@@ -1,0 +1,28 @@
+{
+  "valid_test_cases": [
+    {
+      "iteration": 4,
+      "n": 3,
+      "t": 3,
+      "threshold_pk": "034f35539a389f4ee30364738bd0fa9eea89282fc6bcdc3d1a5af076839f798e5e",
+      "secret_shares": [
+        "d7001bddb23cc4ce19f9fefafae76c70a1d2a311a57a3835136a2c0749ec99e3",
+        "f5aad7afea4263eb2ba013fdb0083d309c8053c672000fabce700f060c3a432e",
+        "8185cb982f57ba156d1d14a0b41fecf5a9362607f1813975e6eef442e857d99b"
+      ],
+      "public_shares": [
+        "021bc7af71e5057fa6fa24ee53d886b14f1c788b7459a2458dbf4b55a7af1f807a",
+        "03f4e59915b5e8f72988a1da69552f6572e991bf4a76f22bbed05d5c7a6b7c8967",
+        "02fdbb8999153aad182d74f24f8c073767de1aa3699e28122be8ffdd5748daf607"
+      ],
+      "signer_count": 3,
+      "signer_indices": [2,0,1],
+      "message": "e536720a82cda9cff53b0f4b2722c9274b1a3e577ab8728cc1feb77db4600a00",
+      "tweaks": [
+        "bfd1437fbeef5edbdcd746588c383f1e107309e650d776a01ea20830c8569f52",
+        "2c39f3260df44cd30ba981ccbdd1d23c86cdc05ab479ce062e0a77439afd1e96"
+      ],
+      "tweak_modes": [true, false]
+    }
+  ]
+}
