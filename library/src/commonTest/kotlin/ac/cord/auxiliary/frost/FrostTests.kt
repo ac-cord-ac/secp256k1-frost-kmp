@@ -10,13 +10,11 @@ import ac.cord.auxiliary.extensions.getValue
 import ac.cord.auxiliary.extensions.getValueOrNull
 import ac.cord.auxiliary.extensions.testThrowable
 import co.touchlab.kermit.Logger
-import com.ionspin.kotlin.bignum.integer.toBigInteger
 import fr.acinq.bitcoin.ByteVector32
 import fr.acinq.bitcoin.PublicKey
 import fr.acinq.bitcoin.XonlyPublicKey
 import fr.acinq.secp256k1.Hex
 import fr.acinq.secp256k1.Secp256k1
-import korlibs.crypto.SecureRandom
 import kotlinx.serialization.json.*
 import kotlin.test.Test
 import kotlin.test.assertContentEquals

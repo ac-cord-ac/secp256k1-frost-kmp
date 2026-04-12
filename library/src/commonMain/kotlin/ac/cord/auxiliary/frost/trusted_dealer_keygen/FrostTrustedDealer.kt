@@ -4,8 +4,8 @@ import ac.cord.auxiliary.cryptography.GroupElement
 import ac.cord.auxiliary.cryptography.Scalar
 import co.touchlab.kermit.Logger
 import com.ionspin.kotlin.bignum.integer.BigInteger
-import fr.acinq.bitcoin.PublicKey
-import korlibs.crypto.SecureRandom
+import fr.acinq.lightning.utils.secure
+import kotlin.random.Random
 
 object FrostTrustedDealer {
     val logger = Logger.withTag("FrostTrustedDealer")
@@ -30,7 +30,7 @@ object FrostTrustedDealer {
         for (i in 0 until t) {
             coefficients.add(
                 Scalar.fromBytesNonZeroChecked(
-                    SecureRandom.nextBytes(32)
+                    Random.secure().nextBytes(32)
                 )
             )
         }

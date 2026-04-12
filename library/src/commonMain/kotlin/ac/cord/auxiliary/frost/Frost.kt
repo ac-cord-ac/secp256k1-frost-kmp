@@ -17,7 +17,8 @@ import fr.acinq.bitcoin.ByteVector32
 import fr.acinq.bitcoin.PublicKey
 import fr.acinq.bitcoin.XonlyPublicKey
 import fr.acinq.bitcoin.crypto.Digest
-import korlibs.crypto.SecureRandom
+import fr.acinq.lightning.utils.secure
+import kotlin.random.Random
 
 object Frost {
 
@@ -111,7 +112,7 @@ object Frost {
             throw IllegalArgumentException("The optional byte array secshare must have length 32.")
         }
 
-        val rand_ = SecureRandom.nextBytes(32)
+        val rand_ = Random.secure().nextBytes(32)
         return nonceGen(
             rand_ = rand_,
             secretShare = secretShare,

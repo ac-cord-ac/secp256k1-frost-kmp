@@ -6,8 +6,9 @@ import ac.cord.auxiliary.frost.trusted_dealer_keygen.FrostTrustedDealership
 import co.touchlab.kermit.Logger
 import com.ionspin.kotlin.bignum.integer.toBigInteger
 import fr.acinq.bitcoin.ByteVector32
+import fr.acinq.lightning.utils.secure
 import fr.acinq.secp256k1.Secp256k1
-import korlibs.crypto.SecureRandom
+import kotlin.random.Random
 import kotlin.test.Test
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
@@ -18,17 +19,12 @@ import kotlin.time.ExperimentalTime
 class RandomSignAndVerifyTests {
     val logger = Logger.withTag("RandomSignAndVerifyTests")
 
-    init {
-        SecureRandom.addSeed(
-            SecureRandom.nextBytes(64)
-        )
-    }
     private fun generateFrostKeys(n: Int, t: Int): FrostTrustedDealership {
         if (t !in 2..n) {
             throw IllegalArgumentException("values must satisfy: 2 <= t <= n")
         }
         val frostTrustedDealership = FrostTrustedDealer.keyGen(
-            thresholdSecretBytes = SecureRandom.nextBytes(32),
+            thresholdSecretBytes = Random.secure().nextBytes(32),
             n = n,
             t = t
         )
@@ -45,9 +41,9 @@ class RandomSignAndVerifyTests {
     fun `test sign and verify random`() {
         val iteration = 2
 
-        val n = SecureRandom.nextInt(2, 11)
+        val n = Random.secure().nextInt(2, 11)
         logger.d("n: $n")
-        val t = SecureRandom.nextInt(2, n+1)
+        val t = Random.secure().nextInt(2, n+1)
         logger.d("t: $t")
 
         val frostTrustedDealership = generateFrostKeys(n, t)
@@ -55,7 +51,7 @@ class RandomSignAndVerifyTests {
         require(frostTrustedDealership.identifiers.size == frostTrustedDealership.secretShares.size)
         require(frostTrustedDealership.secretShares.size == n)
 
-        val signerCount = SecureRandom.nextInt(t, n+1)
+        val signerCount = Random.secure().nextInt(t, n+1)
         val signerIndices = IntRange(0, signerCount-1).shuffled()
 
         logger.d("Signer Count: $signerCount")
@@ -76,15 +72,15 @@ class RandomSignAndVerifyTests {
             groupPublicKey = frostTrustedDealership.thresholdPublicKey
         )
 
-        val message = SecureRandom.nextBytes(32)
-        val v = SecureRandom.nextInt(0, 4)
+        val message = Random.secure().nextBytes(32)
+        val v = Random.secure().nextInt(0, 4)
         print("v: $v")
         val tweaks = IntRange(0, v-1).map {
             ByteVector32(
-                SecureRandom.nextBytes(32)
+                Random.secure().nextBytes(32)
             )
         }
-        val tweaksModes = IntRange(0, v-1).map { SecureRandom.nextBoolean() }
+        val tweaksModes = IntRange(0, v-1).map { Random.secure().nextBoolean() }
 
         val tweakedThresholdPublicKey = Frost.groupPublicKeyAndTweet(
             frostTrustedDealership.thresholdPublicKey,
@@ -138,7 +134,7 @@ class RandomSignAndVerifyTests {
             val aggOtherNonce = Frost.nonceAgg(
                 signerPublicNonces
             )
-            val rand = SecureRandom.nextBytes(32)
+            val rand = Random.secure().nextBytes(32)
 
             val (publicNonceFinal, partialSignatureFinal) = Frost.deterministicSign(
                 signerSecretShares.last(),
@@ -233,7 +229,7 @@ class RandomSignAndVerifyTests {
                 frostSignersContext = frostSignerContext,
                 tweaks = tweaks,
                 isXonlies = tweaksModes,
-                SecureRandom.nextBytes(32), // Random message...
+                Random.secure().nextBytes(32), // Random message...
                 0
             )
         }
