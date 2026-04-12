@@ -32,7 +32,6 @@ import kotlin.test.assertTrue
 class FrostTests {
     val logger = Logger.withTag("FrostTests")
 
-    @Test
     fun `test keygen vectors`() {
         val tests = TestHelpers.readResourceAsJson("vectors/keygen_vectors.json")
 
@@ -331,14 +330,14 @@ class FrostTests {
                 secretNoncesBytes.first()
             )
 
-//            val partialSignature = frostSessionContext.sign(
-//                frostSecretNonceTemp, secretShareP0, myIdentifier
-//            )
-//            assertContentEquals(
-//                expectedPartialSignature,
-//                partialSignature.value.toByteArray(),
-//                "Partial signature not as expected"
-//            )
+            val partialSignature = frostSessionContext.sign(
+                frostSecretNonceTemp, secretShareP0, myIdentifier
+            )
+            assertContentEquals(
+                expectedPartialSignature,
+                partialSignature.value.toByteArray(),
+                "Partial signature not as expected"
+            )
 
             assertTrue(
                 Frost.partialSignatureVerify(
@@ -354,10 +353,8 @@ class FrostTests {
                 ),
                 "partialSignatureVerify failed"
             )
-
         }
 
-        return
         for (signErrorTestCase in testData.jsonObject["sign_error_test_cases"]!!.jsonArray) {
             logger.d(signErrorTestCase.jsonObject["comment"]?.jsonPrimitive?.content ?: "")
 
@@ -384,7 +381,6 @@ class FrostTests {
             val frostSecretNonceTemp = FrostSecretNonce(
                 secretNoncesBytes[signErrorTestCase.jsonObject["secnonce_index"]!!.jsonPrimitive.int]
             )
-
             val frostSessionContext = FrostSessionContext(
                 frostSignersContext = FrostSignersContext(
                     n = n,
@@ -415,6 +411,7 @@ class FrostTests {
         }
 
         for (verifyFailTestCase in testData.jsonObject["verify_fail_test_cases"]!!.jsonArray) {
+            logger.d(verifyFailTestCase.jsonObject["comment"]?.jsonPrimitive?.content ?: "")
             val partialSignature = Hex.decode(verifyFailTestCase.jsonObject["psig"]!!.jsonPrimitive.content)
 
             val identifiersTemp = verifyFailTestCase.jsonObject["id_indices"]!!.jsonArray.map { jsonElement ->
@@ -509,7 +506,10 @@ class FrostTests {
     fun `test tweak vectors`() {
         val testData = TestHelpers.readResourceAsJson("vectors/tweak_vectors.json")
 
-        val secretShareP1 = testData.getValue("secshare_p1")
+        val n = testData.jsonObject["n"]!!.jsonPrimitive.int
+        val t = testData.jsonObject["t"]!!.jsonPrimitive.int
+
+        val secretShareP1 = testData.getValue("secshare_p0")
         val identifiers = testData.jsonObject["identifiers"]!!.jsonArray.map { jsonElement ->
             jsonElement.jsonPrimitive.int
         }
@@ -523,7 +523,11 @@ class FrostTests {
             Frost.individualPublicKey(secretShareP1)
         )
 
-        val secretNonceP1 =  Hex.decode(testData.jsonObject["secnonce_p1"]!!.jsonPrimitive.content)
+        val groupPublicKey = PublicKey(
+            testData.getValue("threshold_pubkey")
+        )
+
+        val secretNonceP1 =  Hex.decode(testData.jsonObject["secnonce_p0"]!!.jsonPrimitive.content)
         val frostPublicNonces = testData.jsonObject["pubnonces"]!!.jsonArray.map { jsonElement ->
             FrostPublicNonce(
                 Hex.decode(jsonElement.jsonPrimitive.content)
@@ -536,8 +540,8 @@ class FrostTests {
         val R_s1 = GroupElement.GENERATOR_POINT.mul(k1)
         val R_s2 = GroupElement.GENERATOR_POINT.mul(k2)
 
-        assertNotNull(R_s1)
-        assertNotNull(R_s2)
+        assertFalse { R_s1.isInfinity }
+        assertFalse { R_s2.isInfinity }
 
         assertContentEquals(
             frostPublicNonces.first().value,
@@ -590,11 +594,11 @@ class FrostTests {
 
             val frostSessionContext = FrostSessionContext(
                 frostSignersContext = FrostSignersContext(
-                    n = 0,
-                    t = 0,
+                    n = n,
+                    t = t,
                     identifiers = identifiersTemp,
                     publicShares = pubicSharesTemp,
-                    groupPublicKey = PublicKey(byteArrayOf())
+                    groupPublicKey = groupPublicKey
                 ),
                 aggregateNonceTemp,
                 tweaksTemp,
@@ -622,11 +626,11 @@ class FrostTests {
                     ),
                     frostPublicNonces = publicNoncesTemp,
                     frostSignersContext = FrostSignersContext(
-                        n = 0,
-                        t = 0,
+                        n = n,
+                        t = t,
                         identifiers = identifiersTemp,
                         publicShares = pubicSharesTemp,
-                        groupPublicKey = PublicKey(byteArrayOf())
+                        groupPublicKey = groupPublicKey
                     ),
                     tweaks = tweaksTemp,
                     isXonlies = tweakModesTemp,
@@ -665,11 +669,11 @@ class FrostTests {
             val myIdentifier = identifiersTemp[signerIndex]
 
             val frostSessionContext = FrostSessionContext(frostSignersContext = FrostSignersContext(
-                n = 0,
-                t = 0,
+                n = n,
+                t = t,
                 identifiers = identifiersTemp,
                 publicShares = pubicSharesTemp,
-                groupPublicKey = PublicKey(byteArrayOf())
+                groupPublicKey = groupPublicKey
             ),
                 aggregateNonceTemp,
                 tweaksTemp,
@@ -696,6 +700,9 @@ class FrostTests {
     fun `test sig agg vectors`() {
         val testData = TestHelpers.readResourceAsJson("vectors/sig_agg_vectors.json")
 
+        val n = testData.jsonObject["n"]!!.jsonPrimitive.int
+        val t = testData.jsonObject["t"]!!.jsonPrimitive.int
+
         val identifiers = testData.jsonObject["identifiers"]!!.jsonArray.map { jsonElement ->
             jsonElement.jsonPrimitive.int
         }
@@ -703,6 +710,10 @@ class FrostTests {
         val publicShares = testData.jsonObject["pubshares"]!!.jsonArray.map { jsonElement ->
             PublicKey(Hex.decode(jsonElement.jsonPrimitive.content))
         }
+
+        val groupPublicKey = PublicKey(
+            testData.getValue("threshold_pubkey")
+        )
 
         val frostPublicNonces = testData.jsonObject["pubnonces"]!!.jsonArray.map { jsonElement ->
             FrostPublicNonce(
@@ -713,9 +724,7 @@ class FrostTests {
         val tweaks = testData.jsonObject["tweaks"]!!.jsonArray.map { jsonElement ->
             Hex.decode(jsonElement.jsonPrimitive.content)
         }
-        val partialSignatures = testData.jsonObject["psigs"]!!.jsonArray.map { jsonElement ->
-            Hex.decode(jsonElement.jsonPrimitive.content)
-        }
+
         val message = Hex.decode(testData.jsonObject["msg"]!!.jsonPrimitive.content)
 
         for (validTestCase in testData.jsonObject["valid_test_cases"]!!.jsonArray) {
@@ -746,19 +755,19 @@ class FrostTests {
                 jsonElement.jsonPrimitive.boolean
             }
 
-            val partialSignaturesTemp = validTestCase.jsonObject["psig_indices"]!!.jsonArray.map { jsonElement ->
-                partialSignatures[jsonElement.jsonPrimitive.int]
+            val partialSignaturesTemp = validTestCase.jsonObject["psigs"]!!.jsonArray.map { jsonElement ->
+                Hex.decode(jsonElement.jsonPrimitive.content)
             }
 
             val expected = Hex.decode(validTestCase.jsonObject["expected"]!!.jsonPrimitive.content)
 
             val frostSessionContext = FrostSessionContext(
                 frostSignersContext = FrostSignersContext(
-                    n = 0,
-                    t = 0,
+                    n = n,
+                    t = t,
                     identifiers = identifiersTemp,
                     publicShares = pubicSharesTemp,
-                    groupPublicKey = PublicKey(byteArrayOf())
+                    groupPublicKey = groupPublicKey
                 ),
                 aggregateNonceTemp,
                 tweaksTemp,
@@ -818,17 +827,17 @@ class FrostTests {
                 jsonElement.jsonPrimitive.boolean
             }
 
-            val partialSignaturesTemp = errorTestCase.jsonObject["psig_indices"]!!.jsonArray.map { jsonElement ->
-                partialSignatures[jsonElement.jsonPrimitive.int]
+            val partialSignaturesTemp = errorTestCase.jsonObject["psigs"]!!.jsonArray.map { jsonElement ->
+                Hex.decode(jsonElement.jsonPrimitive.content)
             }
 
             val frostSessionContext = FrostSessionContext(
                 frostSignersContext = FrostSignersContext(
-                    n = 0,
-                    t = 0,
+                    n = n,
+                    t = t,
                     identifiers = identifiersTemp,
                     publicShares = pubicSharesTemp,
-                    groupPublicKey = PublicKey(byteArrayOf())
+                    groupPublicKey = groupPublicKey
                 ),
                 aggregateNonceTemp,
                 tweaksTemp,

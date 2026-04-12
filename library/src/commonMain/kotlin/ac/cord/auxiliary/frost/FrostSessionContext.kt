@@ -1,10 +1,8 @@
 package ac.cord.auxiliary.frost
 
-import ac.cord.auxiliary.cryptography.CryptographicConstants
 import ac.cord.auxiliary.cryptography.GroupElement
 import ac.cord.auxiliary.cryptography.Scalar
 import ac.cord.auxiliary.cryptography.requireWithinCurveOrderRange
-import ac.cord.auxiliary.cryptography.to32LengthByteArray
 import ac.cord.auxiliary.cryptography.to4LengthByteArray
 import ac.cord.auxiliary.cryptography.toBigInteger
 import ac.cord.auxiliary.exceptions.InvalidContributionException
@@ -59,7 +57,7 @@ data class FrostSessionContext(
 
         val temp = concatIds + aggNonce + tweakContext.Q.toXonlyPublicKey().value.toByteArray() + message
 
-        val b = Scalar.fromBytesNonZeroChecked(
+        val b = Scalar.fromBytesWrapping(
             Frost.taggedHash("FROST/noncecoef", temp)
         )
         try {
@@ -82,7 +80,7 @@ data class FrostSessionContext(
             } else {
                 R_
             }
-            val e = Scalar.fromBytesNonZeroChecked(
+            val e = Scalar.fromBytesWrapping(
                 Frost.taggedHash(
                     "BIP0340/challenge",
                     R.toXonlyPublicKey().value.toByteArray() + tweakContext.Q.toXonlyPublicKey().value.toByteArray() + message
@@ -117,14 +115,23 @@ data class FrostSessionContext(
 
     fun sign(frostSecretNonce: FrostSecretNonce, secretShare: ByteArray, my_id: Int): FrostPartialSignature {
         val sessionValues = getSessionValues()
-
-        val k1_ = frostSecretNonce.getSecretNonce().sliceArray(0..31).toBigInteger()
-        val k2_ = frostSecretNonce.getSecretNonce().sliceArray(32..63).toBigInteger()
+        val k1_ = try {
+            val slice = frostSecretNonce.getSecretNonce().sliceArray(0..31)
+            Scalar.fromBytesNonZeroChecked(
+                slice
+            )
+        } catch (e: Throwable) {
+            throw IllegalArgumentException("first secnonce value is out of range.", e)
+        }
+        val k2_ = try {
+            Scalar.fromBytesNonZeroChecked(
+                frostSecretNonce.getSecretNonce().sliceArray(32..63)
+            )
+        } catch (e: Throwable) {
+            throw IllegalArgumentException("second secnonce value is out of range.", e)
+        }
 
         frostSecretNonce.clear()
-
-        k1_.requireWithinCurveOrderRange("first secnonce value is out of range.")
-        k2_.requireWithinCurveOrderRange("'second secnonce value is out of range.")
 
         val k1 = if (sessionValues.R.hasEvenY()) {
             k1_
@@ -138,10 +145,9 @@ data class FrostSessionContext(
         }
 
         val d_ = secretShare.toBigInteger()
-        d_.requireWithinCurveOrderRange()
+        d_.requireWithinCurveOrderRange("The signer's secret share value is out of range.")
 
         val P = GroupElement.GENERATOR_POINT.mul(d_)
-
 
         require(!P.isInfinity) { "P should not be at infinity" }
 
@@ -151,7 +157,9 @@ data class FrostSessionContext(
             throw IllegalArgumentException("The signer's pubshare must be included in the list of pubshares.")
         }
 
-        // TODO: Signer id check in identifiers...
+        if (!frostSignersContext.identifiers.contains(my_id)) {
+            throw IllegalArgumentException("The signer's id must be present in the participant identifier list.")
+        }
 
         val a = getSessionInterpolatingValue(my_id)
         val g = if (sessionValues.frostTweakContext.Q.hasEvenY()) {
@@ -179,8 +187,8 @@ data class FrostSessionContext(
             )
         )
 
-        val R_s1 = GroupElement.GENERATOR_POINT.mul(k1_)
-        val R_s2 = GroupElement.GENERATOR_POINT.mul(k2_)
+        val R_s1 = GroupElement.GENERATOR_POINT.mul(k1_.toBigInteger())
+        val R_s2 = GroupElement.GENERATOR_POINT.mul(k2_.toBigInteger())
 
         require(!R_s1.isInfinity) { "sign R_s1 can't be infinity" }
         require(!R_s2.isInfinity) { "sign R_s2 can't be infinity" }
@@ -212,9 +220,13 @@ data class FrostSessionContext(
     ): Boolean {
         val sessionValues = getSessionValues()
 
-        val s = Scalar.fromBytesNonZeroChecked(
-            frostPartialSignature.value.toByteArray()
-        )
+        val s = try {
+            Scalar.fromBytesNonZeroChecked(
+                frostPartialSignature.value.toByteArray()
+            )
+        } catch (e: Throwable) {
+            return false
+        }
 
 
         if (!sessionHasSignerPublicShare(publicShare)) {
@@ -282,7 +294,7 @@ data class FrostSessionContext(
 
         identifiers.zip(partialSignatures).forEach { (identifier, partialSignature) ->
             val s_i = try {
-                Scalar.fromBytesNonZeroChecked(
+                Scalar.fromBytesChecked(
                     partialSignature
                 )
             } catch (e: Throwable) {

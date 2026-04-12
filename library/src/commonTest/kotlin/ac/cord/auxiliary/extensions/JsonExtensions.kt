@@ -45,7 +45,7 @@ fun JsonElement.getErrorDetails(key: String): Pair<KClass<out Throwable>, (Any) 
             )
 
         }
-        "value" -> {
+        "ValueError" -> {
             Pair(
                 IllegalArgumentException::class,
                 { e ->

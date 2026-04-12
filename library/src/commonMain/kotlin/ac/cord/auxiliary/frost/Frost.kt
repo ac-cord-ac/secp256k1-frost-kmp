@@ -252,7 +252,7 @@ object Frost {
         frostSignersContext.validateSignersContext()
 
         if (frostSignersContext.publicShares.size != frostPublicNonces.size) {
-            throw IllegalArgumentException("The ids, pubnonces and pubshares arrays must have the same length.")
+            throw IllegalArgumentException("The pubnonces and ids arrays must have the same length.")
         }
         if (tweaks.size != isXonlies.size) {
             throw IllegalArgumentException("The tweaks and is_xonly arrays must have the same length.")

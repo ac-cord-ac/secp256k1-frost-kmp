@@ -43,7 +43,7 @@ data class FrostSignersContext(
         }
 
         if (deriveThresholdPublicKey() != groupPublicKey) {
-            throw IllegalArgumentException("The provided key material ($groupPublicKey) is incorrect ${deriveThresholdPublicKey()}.")
+            throw IllegalArgumentException("The provided key material is incorrect.")
         }
     }
 

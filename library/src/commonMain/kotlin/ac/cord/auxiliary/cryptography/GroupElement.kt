@@ -12,7 +12,7 @@ import kotlin.math.log
 data class GroupElement(
     private val x: FieldElement,
     private val y: FieldElement,
-    var isInfinity: Boolean = false,
+    var isInfinity: Boolean = false, // TODO: Make this private...
 ) {
     companion object {
         private val logger = Logger.withTag("GroupElement")

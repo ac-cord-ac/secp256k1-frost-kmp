@@ -47,7 +47,7 @@ data class FrostTweakContext(
 
 
         val tweak = try {
-            Scalar.fromBytesNonZeroChecked(
+            Scalar.fromBytesChecked(
                 tweakBytes.toByteArray()
             )
         } catch (e: Throwable) {

@@ -1,6 +1,6 @@
 package ac.cord.auxiliary.cryptography
 
-import ac.cord.auxiliary.cryptography.FieldElement
+import co.touchlab.kermit.Logger
 import com.ionspin.kotlin.bignum.integer.BigInteger
 import fr.acinq.secp256k1.Hex
 
@@ -12,15 +12,23 @@ class Scalar(
     denominator = denominator.mod(SIZE),
     size = SIZE
 ) {
+
     constructor(other: Scalar): this(
         numerator = other.numerator,
         denominator = other.denominator
     )
 
+    /**
+     * This is the same as from_int_checked in bip-frost-signing
+     */
     constructor(other: BigInteger): this(
         numerator = other.mod(SIZE),
         denominator = BigInteger.ONE
-    )
+    ) {
+        if (other >= size) {
+            throw IllegalArgumentException("int ($other) is too large for from_int_checked ${size}")
+        }
+    }
 
     constructor(a: Scalar, b: Scalar): this(
         numerator = a.numerator.times(b.denominator).mod(SIZE),
@@ -111,12 +119,15 @@ class Scalar(
 
 
     companion object {
+
+        val logger = Logger.withTag("Scalar")
+
         val SIZE = Hex.decode(
             "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141"
         ).toBigInteger()
 
         fun fromBigIntegerNonZeroChecked(other: BigInteger): Scalar {
-            if (other !in BigInteger.ZERO..SIZE) {
+            if (other !in BigInteger.ONE..SIZE) {
                 throw IllegalArgumentException("Value is out of range to be a scalar")
             }
             return Scalar(other)
@@ -125,6 +136,20 @@ class Scalar(
         fun fromBytesNonZeroChecked(other: ByteArray): Scalar {
             return fromBigIntegerNonZeroChecked(
                 other.toBigInteger()
+            )
+        }
+
+        fun fromBytesChecked(bytes: ByteArray): Scalar {
+            val v = bytes.toBigInteger()
+
+            return Scalar(
+                v
+            )
+        }
+
+        fun fromBytesWrapping(other: ByteArray): Scalar {
+            return Scalar(
+                other.toBigInteger().mod(SIZE)
             )
         }
     }
