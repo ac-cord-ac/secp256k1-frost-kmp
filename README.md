@@ -1,3 +1,3 @@
 # Secp256k1 Frost KMP
 
-Experimental + Unsafe Kotlin Multiplatform rewrite of [bip-frost-signing](https://github.com/jesseposner/bip-frost-signing.git).
+Experimental + Unsafe Kotlin Multiplatform implentation of [bip-frost-signing](https://github.com/siv2r/bip-frost-signing).
