@@ -2,6 +2,7 @@ package ac.cord.auxiliary.frost.trusted_dealer_keygen
 
 import ac.cord.auxiliary.cryptography.GroupElement
 import ac.cord.auxiliary.cryptography.Scalar
+import ac.cord.auxiliary.frost.dkg.trusted.FrostTrustedDealer
 import com.ionspin.kotlin.bignum.integer.BigInteger
 import fr.acinq.bitcoin.ByteVector32
 import fr.acinq.lightning.utils.secure

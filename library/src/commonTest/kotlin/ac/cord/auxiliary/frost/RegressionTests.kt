@@ -1,9 +1,8 @@
 package ac.cord.auxiliary.frost
 
 import ac.cord.auxiliary.cryptography.GroupElement
-import ac.cord.auxiliary.frost.trusted_dealer_keygen.FrostTrustedDealer
+import ac.cord.auxiliary.frost.dkg.trusted.FrostTrustedDealer
 import fr.acinq.bitcoin.ByteVector32
-import fr.acinq.bitcoin.PublicKey
 import fr.acinq.secp256k1.Hex
 import fr.acinq.secp256k1.Secp256k1
 import kotlin.test.Test
