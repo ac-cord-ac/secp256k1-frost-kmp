@@ -32,3 +32,7 @@ When re-syncing with a newer upstream commit:
 2. Copy the vector files from `python/vectors/` into `library/src/commonTest/resources/vectors/` (overwrite;
    `extra_vectors.json` is local and can be regenerated with the reference's deterministic trusted dealer).
 3. Update the commit reference in this README.
+
+## Known issues
+
+Outstanding security and code-health items are tracked in [KNOWN_ISSUES.md](KNOWN_ISSUES.md).
