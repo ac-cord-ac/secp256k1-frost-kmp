@@ -31,7 +31,7 @@ As a side benefit this should also fix the performance problem noted under Code 
 
 ### 2. Trusted-dealer keygen only
 
-Key generation is trusted-dealer only (`frost/trusted_dealer_keygen/FrostTrustedDealer.kt`),
+Key generation is trusted-dealer only (`frost/dkg/trusted/FrostTrustedDealer.kt`),
 matching the upstream reference — whose own header warns it is insecure and not for
 production use. A single party knows the full threshold secret and all shares.
 
