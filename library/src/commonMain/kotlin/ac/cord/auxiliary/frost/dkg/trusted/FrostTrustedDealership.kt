@@ -1,4 +1,4 @@
-package ac.cord.auxiliary.frost.trusted_dealer_keygen
+package ac.cord.auxiliary.frost.dkg.trusted
 
 import fr.acinq.bitcoin.ByteVector32
 import fr.acinq.bitcoin.PublicKey

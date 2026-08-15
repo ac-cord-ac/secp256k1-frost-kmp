@@ -2,8 +2,8 @@ package ac.cord.auxiliary.frost
 
 import ac.cord.auxiliary.TestHelpers
 import ac.cord.auxiliary.extensions.getValue
-import ac.cord.auxiliary.frost.trusted_dealer_keygen.FrostTrustedDealer
-import ac.cord.auxiliary.frost.trusted_dealer_keygen.FrostTrustedDealership
+import ac.cord.auxiliary.frost.dkg.trusted.FrostTrustedDealer
+import ac.cord.auxiliary.frost.dkg.trusted.FrostTrustedDealership
 import co.touchlab.kermit.Logger
 import fr.acinq.bitcoin.ByteVector32
 import fr.acinq.bitcoin.PublicKey
