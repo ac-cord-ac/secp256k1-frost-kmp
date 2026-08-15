@@ -7,12 +7,11 @@ import fr.acinq.bitcoin.ByteVector32
 import fr.acinq.bitcoin.PublicKey
 import fr.acinq.bitcoin.XonlyPublicKey
 import fr.acinq.secp256k1.Hex
-import kotlin.math.log
 
 data class GroupElement(
     private val x: FieldElement,
     private val y: FieldElement,
-    var isInfinity: Boolean = false, // TODO: Make this private...
+    val isInfinity: Boolean = false,
 ) {
     companion object {
         private val logger = Logger.withTag("GroupElement")
@@ -136,8 +135,8 @@ data class GroupElement(
             return this
         }
 
-        val lam: FieldElement? = if (this.x.toBigInteger() ==  other.x.toBigInteger()) {
-            if (this.y.toBigInteger() != other.y.toBigInteger()) {
+        val lam: FieldElement? = if (this.x == other.x) {
+            if (this.y != other.y) {
                 require(this.y.plus(other.y).toBigInteger() == BigInteger.ZERO) { "A point added to its own negation is infinity." }
 
                 return INFINITY

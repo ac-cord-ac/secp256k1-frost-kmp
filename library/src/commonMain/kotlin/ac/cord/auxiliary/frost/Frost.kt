@@ -3,7 +3,7 @@ package ac.cord.auxiliary.frost
 import ac.cord.auxiliary.cryptography.CryptographicConstants
 import ac.cord.auxiliary.cryptography.GroupElement
 import ac.cord.auxiliary.cryptography.Scalar
-import ac.cord.auxiliary.cryptography.requireWithinCurveOrderRange
+import ac.cord.auxiliary.cryptography.to32LengthByteArray
 import ac.cord.auxiliary.cryptography.to4LengthByteArray
 import ac.cord.auxiliary.cryptography.to8LengthByteArray
 import ac.cord.auxiliary.cryptography.toBigInteger
@@ -44,12 +44,12 @@ object Frost {
             extraIn.size.to4LengthByteArray() + extraIn +
             byteArrayOf(index.toByte())
 
-        return taggedHash("FROST/nonce", buffer).toBigInteger()
+        return taggedHash("BIP0445/nonce", buffer).toBigInteger()
     }
 
     private fun computeRand(rand_: ByteVector32, secretShare: ByteVector32?): ByteArray { // TODO: Might want to make this ByteVector32
         return secretShare?.toByteArray()?.xor(
-            taggedHash("FROST/aux", rand_.toByteArray())
+            taggedHash("BIP0445/aux", rand_.toByteArray())
         ) ?: rand_.toByteArray()
     }
 
@@ -97,7 +97,7 @@ object Frost {
             Rs1.toCompressedBytes().value.toByteArray() + Rs2.toCompressedBytes().value.toByteArray()
         )
         val frostSecretNonce = FrostSecretNonce(
-            k1.toByteArray() + k2.toByteArray()
+            k1.to32LengthByteArray() + k2.to32LengthByteArray()
         )
 
         return Pair(
@@ -140,7 +140,7 @@ object Frost {
                     GroupElement.fromCompressedBytes(
                         pubkey
                     )
-                }  catch (e: Throwable) {
+                }  catch (e: Exception) {
                     throw InvalidContributionException(index.toBigInteger(), "pubnonce", e)
                 }
 
@@ -163,7 +163,7 @@ object Frost {
     fun  deriveInterpolatingValue(identifiers: List<Int>, signerIdentifier: Int): Scalar {
         require(identifiers.contains(signerIdentifier)) { "Signer identifier needs to be among identifiers" }
 
-        require(signerIdentifier.toBigInteger() in BigInteger.ZERO..BigInteger.TWO.pow(32)) { "Signer identifier needs to be within supported range" }
+        require(signerIdentifier.toBigInteger() in BigInteger.ZERO..<BigInteger.TWO.pow(32)) { "Signer identifier needs to be within supported range" }
         require(identifiers.toSet().size == identifiers.size) { "All identifiers need to be unique" }
 
         var numerator = Scalar(BigInteger.ONE)
@@ -191,7 +191,7 @@ object Frost {
         identifiers.zip(publicShares).forEach { (my_id, publicShare) ->
             val XI = try {
                 GroupElement.fromCompressedBytes(publicShare)
-            } catch (e: Throwable) {
+            } catch (e: Exception) {
                 throw InvalidContributionException(
                     my_id.toBigInteger(),
                     "pubshare",
@@ -208,14 +208,14 @@ object Frost {
             val multiple = XI.mul(lamI.toBigInteger())
             Q = Q.add(multiple)
         }
-        require(!Q.isInfinity) { "Q cannot be at infinity" }
+        require(!Q.isInfinity) { "The threshold pubkey must not be the point at infinity." }
         return Q.toCompressedBytes()
     }
 
     fun thresholdPublicKeyAndTweak(
         publicShares: List<PublicKey>,
         ids: List<Int>,
-        tweaks: List<ByteVector32>,
+        tweaks: List<ByteArray>,
         isXonlies: List<Boolean>
     ): FrostTweakContext {
         if (publicShares.size != ids.size) {
@@ -232,7 +232,7 @@ object Frost {
 
     fun thresholdPublicKeyAndTweak(
         thresholdPublicKey: PublicKey,
-        tweaks: List<ByteVector32>,
+        tweaks: List<ByteArray>,
         isXonlies: List<Boolean>
     ): FrostTweakContext {
         if (tweaks.size != isXonlies.size) {
@@ -256,7 +256,7 @@ object Frost {
         frostPartialSignature: FrostPartialSignature,
         frostPublicNonces: List<FrostPublicNonce>,
         frostSignersContext: FrostSignersContext,
-        tweaks: List<ByteVector32>,
+        tweaks: List<ByteArray>,
         isXonlies: List<Boolean>,
         message: ByteArray,
         index: Int
@@ -268,6 +268,9 @@ object Frost {
         }
         if (tweaks.size != isXonlies.size) {
             throw IllegalArgumentException("The tweaks and is_xonly arrays must have the same length.")
+        }
+        if (index !in frostSignersContext.identifiers.indices) {
+            throw IllegalArgumentException("The signer index is out of range.")
         }
 
         val aggNonce = nonceAgg(
@@ -287,7 +290,7 @@ object Frost {
     private fun computeSecretShare(rand: ByteArray?, secretShare: ByteVector32): ByteArray { // TODO: Might want to make this ByteVector32
         return if (rand != null) {
             secretShare.toByteArray().xor(
-                taggedHash("FROST/aux", rand)
+                taggedHash("BIP0445/aux", rand)
             )
         } else {
             secretShare.toByteArray()
@@ -297,15 +300,13 @@ object Frost {
     fun deterministicSign(
         secretShare: ByteVector32,
         my_id: Int,
-        aggothernonce: FrostPublicNonce,
+        aggothernonce: FrostPublicNonce?,
         frostSignersContext: FrostSignersContext,
-        tweaks: List<ByteVector32>,
+        tweaks: List<ByteArray>,
         isXonlies: List<Boolean>,
         message: ByteArray,
         rand: ByteArray?
     ): Pair<FrostPublicNonce, FrostPartialSignature> {
-        secretShare.toBigInteger().requireWithinCurveOrderRange("The signer's secret share value is out of range.")
-
         val secShare_ = computeSecretShare(
             rand, secretShare
         )
@@ -318,14 +319,19 @@ object Frost {
             isXonlies = isXonlies
         ).getXonlyPublicKey()
 
+        // A sole signer (u = 1) has no other nonces to aggregate, so aggothernonce is
+        // omitted. Bind the empty byte string into the nonce hash and use the signer's
+        // own pubnonce as the aggregate nonce below.
+        val aggothernonce_ = aggothernonce?.value ?: byteArrayOf()
+
         val k_1 = Scalar.fromBytesWrapping(
             deterministicNonceHash(
-                secShare_, aggothernonce.value, tweakedThresholdPublicKey, message, 0
+                secShare_, my_id, frostSignersContext.identifiers, aggothernonce_, tweakedThresholdPublicKey, message, 0
             )
         )
         val k_2 = Scalar.fromBytesWrapping(
             deterministicNonceHash(
-                secShare_, aggothernonce.value, tweakedThresholdPublicKey, message, 1
+                secShare_, my_id, frostSignersContext.identifiers, aggothernonce_, tweakedThresholdPublicKey, message, 1
             )
         )
 
@@ -346,12 +352,16 @@ object Frost {
             k_1.toByteArray() + k_2.toByteArray()
         )
 
-        val aggregateNonce = try {
-            nonceAgg(
-                listOf(frostPublicNonce, aggothernonce),
-            )
-        } catch (e: Throwable) {
-            throw InvalidContributionException(null, "aggothernonce", e)
+        val aggregateNonce = if (aggothernonce == null) {
+            frostPublicNonce.value
+        } else {
+            try {
+                nonceAgg(
+                    listOf(frostPublicNonce, aggothernonce),
+                )
+            } catch (e: Exception) {
+                throw InvalidContributionException(null, "aggothernonce", e)
+            }
         }
 
         val frostSessionContext = FrostSessionContext(
@@ -373,13 +383,18 @@ object Frost {
         )
     }
 
-    fun deterministicNonceHash(secretShare: ByteArray, aggothernonce: ByteArray, tweakedThresholdPublicKey: XonlyPublicKey, message: ByteArray, index: Int): ByteArray {
+    fun deterministicNonceHash(secretShare: ByteArray, my_id: Int, identifiers: List<Int>, aggothernonce: ByteArray, tweakedThresholdPublicKey: XonlyPublicKey, message: ByteArray, index: Int): ByteArray {
 
-        val buffer = secretShare + aggothernonce + tweakedThresholdPublicKey.value.toByteArray()  +
+        val buffer = secretShare + my_id.to4LengthByteArray() + identifiers.size.to4LengthByteArray() + serializeIdentifiers(identifiers) +
+                aggothernonce + tweakedThresholdPublicKey.value.toByteArray()  +
                 message.size.to8LengthByteArray() + message +
                 byteArrayOf(index.toByte())
 
-        return taggedHash("FROST/deterministic/nonce", buffer)
+        return taggedHash("BIP0445/deterministic/nonce", buffer)
+    }
+
+    internal fun serializeIdentifiers(identifiers: List<Int>): ByteArray {
+        return identifiers.sorted().flatMap { it.to4LengthByteArray().asIterable() }.toByteArray()
     }
 
 

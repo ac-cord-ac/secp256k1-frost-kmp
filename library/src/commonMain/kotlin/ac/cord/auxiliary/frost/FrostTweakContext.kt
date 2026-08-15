@@ -4,7 +4,6 @@ import ac.cord.auxiliary.cryptography.GroupElement
 import ac.cord.auxiliary.cryptography.Scalar
 import co.touchlab.kermit.Logger
 import com.ionspin.kotlin.bignum.integer.BigInteger
-import fr.acinq.bitcoin.ByteVector32
 import fr.acinq.bitcoin.PublicKey
 import fr.acinq.bitcoin.XonlyPublicKey
 
@@ -38,17 +37,20 @@ data class FrostTweakContext(
             }
         )
     }
-    fun applyTweak(tweakBytes: ByteVector32, isXonly: Boolean): FrostTweakContext {
+    fun applyTweak(tweakBytes: ByteArray, isXonly: Boolean): FrostTweakContext {
+        if (tweakBytes.size != 32) {
+            throw IllegalArgumentException("The tweak must be a 32-byte array.")
+        }
 
         val g = computeG(isXonly)
 
 
         val tweak = try {
             Scalar.fromBytesChecked(
-                tweakBytes.toByteArray()
+                tweakBytes
             )
-        } catch (e: Throwable) {
-            throw IllegalArgumentException("The tweak must be less than n.", e)
+        } catch (e: Exception) {
+            throw IllegalArgumentException("The tweak value is out of range.", e)
         }
 
         val Q_ = Q.mul(g.toBigInteger()).add(
@@ -56,7 +58,7 @@ data class FrostTweakContext(
         )
 
         if (Q_.isInfinity) {
-            throw IllegalStateException("The result of tweaking cannot be infinity.")
+            throw IllegalArgumentException("The result of tweaking cannot be infinity.")
         }
 
         val gacc_ = g.times(gacc)

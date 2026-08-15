@@ -148,4 +148,46 @@ class FrostTrustedDealerTests {
             )
         }
     }
+
+    @Test
+    fun `test trusted dealer keygen deterministic`() {
+        val thresholdSecretKeyBytes = ByteVector32(
+            Random.secure().nextBytes(32)
+        )
+
+        val first = FrostTrustedDealer.keyGen(
+            n = 5,
+            t = 3,
+            thresholdSecretBytes = thresholdSecretKeyBytes
+        )
+        val second = FrostTrustedDealer.keyGen(
+            n = 5,
+            t = 3,
+            thresholdSecretBytes = thresholdSecretKeyBytes
+        )
+
+        assertEquals(first, second)
+    }
+
+    @Test
+    fun `test trusted dealer keygen threshold one`() {
+        val thresholdSecretKeyBytes = ByteVector32(
+            Random.secure().nextBytes(32)
+        )
+
+        val frostTrustedDealership = FrostTrustedDealer.keyGen(
+            n = 3,
+            t = 1,
+            thresholdSecretBytes = thresholdSecretKeyBytes
+        )
+
+        // Degree-0 polynomial: every share equals the threshold secret, and every
+        // public share equals the threshold public key.
+        frostTrustedDealership.secretShares.forEach { secretShare ->
+            assertEquals(thresholdSecretKeyBytes, secretShare)
+        }
+        frostTrustedDealership.publicShares.forEach { publicShare ->
+            assertEquals(frostTrustedDealership.thresholdPublicKey, publicShare)
+        }
+    }
 }

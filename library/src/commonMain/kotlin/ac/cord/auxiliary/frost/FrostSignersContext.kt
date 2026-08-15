@@ -15,7 +15,9 @@ data class FrostSignersContext(
 ) {
     val logger = Logger.withTag("FrostSignersContext")
     fun validateSignersContext() {
-        require(t <= n) {"Threshold has to be below or equal to number of signers"}
+        if (t < 1 || t > n) {
+            throw IllegalArgumentException("The threshold must be 1 <= t <= n.")
+        }
         if (identifiers.size !in t..n) {
             throw IllegalArgumentException("The number of signers must be between t and n.")
         }
@@ -25,13 +27,17 @@ data class FrostSignersContext(
         }
         identifiers.zip(publicShares).forEachIndexed { index, (identifier, publicShare) ->
             if (identifier.toBigInteger().intValue() !in 0..<n) {
-                throw IllegalArgumentException("The participant identifier $index is out of range.")
+                throw IllegalArgumentException("The participant identifier at index $index is out of range.")
             }
 
             try {
                 GroupElement.fromCompressedBytes(publicShare)
-            } catch (e: Throwable) {
-                throw InvalidContributionException(index.toBigInteger(), "pubshare", e)
+            } catch (e: Exception) {
+                // A malformed pubshare is invalid pre-protocol input, not a protocol
+                // contribution: the signers context is agreed upon before signing
+                // begins, so we signal it with IllegalArgumentException rather than
+                // blaming a signer via InvalidContributionException.
+                throw IllegalArgumentException("Invalid pubshare at index $index.", e)
             }
         }
 
@@ -50,7 +56,7 @@ data class FrostSignersContext(
         identifiers.zip(publicShares).forEachIndexed { index, (identifier, publicShare) ->
             val X_i = try {
                 GroupElement.fromCompressedBytes(publicShare)
-            } catch (e: Throwable) {
+            } catch (e: Exception) {
                 throw InvalidContributionException(index.toBigInteger(), "pubshare", e)
             }
             val lam_i = Frost.deriveInterpolatingValue(
@@ -61,7 +67,7 @@ data class FrostSignersContext(
             Q = Q.add(multiple)
         }
 
-        require(!Q.isInfinity) {"Q should not be at infinity"}
+        require(!Q.isInfinity) {"The threshold pubkey must not be the point at infinity."}
         return Q.toCompressedBytes()
     }
 

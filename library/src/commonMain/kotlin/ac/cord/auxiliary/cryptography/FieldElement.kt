@@ -110,12 +110,6 @@ class FieldElement(
         )
     }
 
-    override fun divide(other: BigInteger): FieldElement {
-        return FieldElement(
-            other
-        )
-    }
-
     override fun pow(other: BigInteger): FieldElement {
         return FieldElement(
             numerator = this.numerator.pow(other, this.size),

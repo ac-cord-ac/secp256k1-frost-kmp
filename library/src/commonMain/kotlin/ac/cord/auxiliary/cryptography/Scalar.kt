@@ -26,7 +26,7 @@ class Scalar(
         denominator = BigInteger.ONE
     ) {
         if (other >= size) {
-            throw IllegalArgumentException("int ($other) is too large for from_int_checked ${size}")
+            throw IllegalArgumentException("int is too large for from_int_checked")
         }
     }
 
@@ -93,12 +93,6 @@ class Scalar(
         )
     }
 
-    override fun divide(other: BigInteger): Scalar {
-        return Scalar(
-            other
-        )
-    }
-
     override fun pow(other: BigInteger): Scalar {
         return Scalar(
             numerator = this.numerator.pow(other, this.size),
@@ -127,7 +121,7 @@ class Scalar(
         ).toBigInteger()
 
         fun fromBigIntegerNonZeroChecked(other: BigInteger): Scalar {
-            if (other !in BigInteger.ONE..SIZE) {
+            if (other !in BigInteger.ONE..<SIZE) {
                 throw IllegalArgumentException("Value is out of range to be a scalar")
             }
             return Scalar(other)

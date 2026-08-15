@@ -2,22 +2,23 @@ package ac.cord.auxiliary.frost.trusted_dealer_keygen
 
 import ac.cord.auxiliary.cryptography.GroupElement
 import ac.cord.auxiliary.cryptography.Scalar
+import ac.cord.auxiliary.cryptography.to4LengthByteArray
 import ac.cord.auxiliary.frost.Frost
 import co.touchlab.kermit.Logger
 import com.ionspin.kotlin.bignum.integer.BigInteger
 import fr.acinq.bitcoin.ByteVector32
-import fr.acinq.lightning.utils.secure
-import kotlin.random.Random
 
 object FrostTrustedDealer {
     val logger = Logger.withTag("FrostTrustedDealer")
+
+    const val COEFF_DERIVATION_TAG = "BIP0445/trusted/keygen"
 
     fun keyGen(
         thresholdSecretBytes: ByteVector32,
         n: Int,
         t: Int
     ): FrostTrustedDealership {
-        require(t in 2..n) { "threshold needs to be between 2 and n" }
+        require(t in 1..n) { "values must satisfy: 1 <= t <= n" }
 
         val thresholdSecret = Scalar.fromBytesNonZeroChecked(
             thresholdSecretBytes.toByteArray()
@@ -28,12 +29,11 @@ object FrostTrustedDealer {
 
         val thresholdPublicKey = thresholdPublicKeyGroupElement.toCompressedBytes()
 
-        val coefficients = mutableListOf<Scalar>()
-        repeat(t-1) {
-            coefficients.add(
-                Scalar.fromBytesNonZeroChecked(
-                    Random.secure().nextBytes(32)
-                )
+        // Derive coefficient i deterministically from the threshold secret and the
+        // index, so the same input always yields the same shares.
+        val coefficients = (1 until t).map { i ->
+            Scalar.fromBytesNonZeroChecked(
+                Frost.taggedHash(COEFF_DERIVATION_TAG, thresholdSecretBytes.toByteArray() + i.to4LengthByteArray())
             )
         }
 

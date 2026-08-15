@@ -1,28 +1,126 @@
 {
-  "valid_test_cases": [
-    {
-      "iteration": 4,
-      "n": 3,
-      "t": 3,
-      "threshold_pk": "034f35539a389f4ee30364738bd0fa9eea89282fc6bcdc3d1a5af076839f798e5e",
-      "secret_shares": [
-        "d7001bddb23cc4ce19f9fefafae76c70a1d2a311a57a3835136a2c0749ec99e3",
-        "f5aad7afea4263eb2ba013fdb0083d309c8053c672000fabce700f060c3a432e",
-        "8185cb982f57ba156d1d14a0b41fecf5a9362607f1813975e6eef442e857d99b"
-      ],
-      "public_shares": [
-        "021bc7af71e5057fa6fa24ee53d886b14f1c788b7459a2458dbf4b55a7af1f807a",
-        "03f4e59915b5e8f72988a1da69552f6572e991bf4a76f22bbed05d5c7a6b7c8967",
-        "02fdbb8999153aad182d74f24f8c073767de1aa3699e28122be8ffdd5748daf607"
-      ],
-      "signer_count": 3,
-      "signer_indices": [2,0,1],
-      "message": "e536720a82cda9cff53b0f4b2722c9274b1a3e577ab8728cc1feb77db4600a00",
-      "tweaks": [
-        "bfd1437fbeef5edbdcd746588c383f1e107309e650d776a01ea20830c8569f52",
-        "2c39f3260df44cd30ba981ccbdd1d23c86cdc05ab479ce062e0a77439afd1e96"
-      ],
-      "tweak_modes": [true, false]
-    }
-  ]
+ "valid_test_cases": [
+  {
+   "iteration": 0,
+   "n": 3,
+   "t": 2,
+   "thresh_sk": "1032e73c70f3f77239b8f02e0aba2a0b0df8f959c4564e57c8dc57db6a5487fc",
+   "threshold_pk": "0246df0eb00ca7e71784750537960aeaf4d7fad8e6f5bdb162df5b3445d25dde90",
+   "secret_shares": [
+    "356e52400b145d2e69f125fa813a927a5188968160a641d721e8b73eabfebfa4",
+    "5aa9bd43a534c2ea9a295bc6f7bafae9951833a8fcf635567af516a1eda8f74c",
+    "7fe528473f5528a6ca6191936e3b6358d8a7d0d0994628d5d40176052f532ef4"
+   ],
+   "public_shares": [
+    "03d99a10c2910995a6927445631bbee160b11fe452c03ebc813ed536e426e6b72d",
+    "03a94380600d3c1c494cd457875497585e86ae789da9a8c9dfd0deceac3d34d7a1",
+    "03a25c85b9dee3e3c01c8ce0b8459270beb51ad91bfe40ee0ad01711cd837e5e72"
+   ],
+   "signer_count": 2,
+   "signer_indices": [
+    0,
+    1
+   ],
+   "message": "42a98f3d3ee09518c8e23699af60fa6d97bb457436a68142b342d2395ecfe405",
+   "tweaks": [],
+   "tweak_modes": []
+  },
+  {
+   "iteration": 1,
+   "n": 3,
+   "t": 3,
+   "thresh_sk": "121c4ce212fc3e0024557ca1cea905184127d2fa9baa97db61da178f246f70f1",
+   "threshold_pk": "027e8e31885d852f0cf49a7664371ec1f96acce2373b680389d388a1c3fd481a22",
+   "secret_shares": [
+    "34a42dc91c863c20e18d7e02bbbfb89dce40e7d49c0912505748a1c128f6e669",
+    "9080a8840c6fce6b3bb89d811b74c351ad938bc154e8c26d67e0d5484460a09e",
+    "25b1bd12e2b8f4df32d6db1cedc825352470e1da170107f6d3d05397a6765e4f"
+   ],
+   "public_shares": [
+    "029bd349bc9614c9a2a2a7c1d46b7f850c8896398aad4915b00a9f1de3fd391b22",
+    "03e56630af9d790864e4c6695c41801655e530e5683a5e6ecb8db7453c24669c80",
+    "03293815377b4eaaa9edc863d3bf2f7359d914ea68c5b57e5aa2e4cfe3e3d5804a"
+   ],
+   "signer_count": 3,
+   "signer_indices": [
+    2,
+    0,
+    1
+   ],
+   "message": "289e5175e02c788c2d442cfe81d6be0533d8c13e253ef763fda45d37accfe4d4",
+   "tweaks": [
+    "4975e8d7733d08ac6f1a8254e9074ed07255fb2921738286cd526e2c087b5fc8"
+   ],
+   "tweak_modes": [
+    true
+   ]
+  },
+  {
+   "iteration": 2,
+   "n": 5,
+   "t": 3,
+   "thresh_sk": "f7ae4a335ea62c491b47df2f50271a3e80749b7643fb130acf136e18893dec2c",
+   "threshold_pk": "0285efae125964ac690e8fd703035a96a0835cf8f9ff5c5e2e0c67004370e37b19",
+   "secret_shares": [
+    "a86af1dfab42f58365f6f21d7fbd7f3425b0a2488619de9d9f19c5810c8b85de",
+    "9eea9b63fbfb5083ce05e181daf00eb4608807612af1dc4babdff3d8d5f093cb",
+    "db2d46c050cf3d4a5374ad5c61bec8bf30facac032830c14f565f91fe56d15f3",
+    "5d32f3f4a9bebbd6f64355ad1429ad55dc5a0f7eed84cdbdbbd976c96acacb15",
+    "24fba30106c9cc29b671da73f230bc771d54b2840b3fc181bf0ccb62363ff472"
+   ],
+   "public_shares": [
+    "023ed0f8945ba3c78f7b463e00f5483f36af3dc35e6de9c08fde40ef171617ffce",
+    "02f0a0f1b46052c85da203ece72ce33c191582cf72afff4e70ade8d30cc32b1186",
+    "02aa310ea9f8f98b383adf96a710cd72f71b8b7ec6d3394380959deeb161f9002e",
+    "02181157a584c8adc93dac8ad0e67c3222167c7d63b074f944e88b0ccc1a363fde",
+    "034b1bc46ea539e8f9af210a3ca75f84a07a8cc75e300bec9f0018c81f4d9939c8"
+   ],
+   "signer_count": 3,
+   "signer_indices": [
+    1,
+    3,
+    4
+   ],
+   "message": "a78521e49048b6e0d368d3fba417fc20c7546272dafa78a8a173fcca6c81233b",
+   "tweaks": [
+    "ac7b0d0420f0d4a567d9abcb8a52e02cfae21690fd8d2d5934370dcc5aaee221",
+    "58e2385eb96d1c906bbd807eafd1fddb80fb2f43026a16386a400e6832644cbc"
+   ],
+   "tweak_modes": [
+    true,
+    false
+   ]
+  },
+  {
+   "iteration": 3,
+   "n": 4,
+   "t": 1,
+   "thresh_sk": "374c9514bfad2da8f7205fc046640cf96f65d1e6dfec6df52f64e9c713d740ed",
+   "threshold_pk": "024199723c06ca0b4d951acdbc110bd6dfd05227d3d62302d8ff9041afc8aa6389",
+   "secret_shares": [
+    "374c9514bfad2da8f7205fc046640cf96f65d1e6dfec6df52f64e9c713d740ed",
+    "374c9514bfad2da8f7205fc046640cf96f65d1e6dfec6df52f64e9c713d740ed",
+    "374c9514bfad2da8f7205fc046640cf96f65d1e6dfec6df52f64e9c713d740ed",
+    "374c9514bfad2da8f7205fc046640cf96f65d1e6dfec6df52f64e9c713d740ed"
+   ],
+   "public_shares": [
+    "024199723c06ca0b4d951acdbc110bd6dfd05227d3d62302d8ff9041afc8aa6389",
+    "024199723c06ca0b4d951acdbc110bd6dfd05227d3d62302d8ff9041afc8aa6389",
+    "024199723c06ca0b4d951acdbc110bd6dfd05227d3d62302d8ff9041afc8aa6389",
+    "024199723c06ca0b4d951acdbc110bd6dfd05227d3d62302d8ff9041afc8aa6389"
+   ],
+   "signer_count": 2,
+   "signer_indices": [
+    3,
+    1
+   ],
+   "message": "89da2bd31a5d008c84323c9693f12f09e62a75a688a55f2a6fd24660afba5660",
+   "tweaks": [
+    "d002d8e6de7b9433d021c53b1f6edb0a25c428295b61fefdab24fa35e70fe6f2"
+   ],
+   "tweak_modes": [
+    false
+   ]
+  }
+ ]
 }

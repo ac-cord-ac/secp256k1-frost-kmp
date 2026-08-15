@@ -15,7 +15,7 @@ import fr.acinq.bitcoin.PublicKey
 data class FrostSessionContext(
     val frostSignersContext: FrostSignersContext,
     val aggNonce: ByteArray,
-    val tweaks: List<ByteVector32>,
+    val tweaks: List<ByteArray>,
     val isXonlies: List<Boolean>,
     val message: ByteArray
 ) {
@@ -49,16 +49,12 @@ data class FrostSessionContext(
         val tweakContext = Frost.thresholdPublicKeyAndTweak(frostSignersContext.publicShares, frostSignersContext.identifiers, tweaks, isXonlies)
 
 
-        val sortedIdentifiers = frostSignersContext.identifiers.map {
-            it.to4LengthByteArray()
-        }.sortedBy { it.toHexString() }
+        val concatIds = Frost.serializeIdentifiers(frostSignersContext.identifiers)
 
-        val concatIds = sortedIdentifiers.flatMap { it.asIterable() }.toByteArray()
-
-        val temp = concatIds + aggNonce + tweakContext.Q.toXonlyPublicKey().value.toByteArray() + message
+        val temp = frostSignersContext.identifiers.size.to4LengthByteArray() + concatIds + aggNonce + tweakContext.Q.toXonlyPublicKey().value.toByteArray() + message
 
         val b = Scalar.fromBytesWrapping(
-            Frost.taggedHash("FROST/noncecoef", temp)
+            Frost.taggedHash("BIP0445/noncecoef", temp)
         )
         try {
             val R_1 = GroupElement.fromCompressedBytesWithInfinity(
@@ -93,7 +89,7 @@ data class FrostSessionContext(
                 R = R,
                 e = e
             )
-        } catch (e: Throwable) {
+        } catch (e: Exception) {
             throw InvalidContributionException(
                 null,
                 "aggnonce",
@@ -120,14 +116,14 @@ data class FrostSessionContext(
             Scalar.fromBytesNonZeroChecked(
                 slice
             )
-        } catch (e: Throwable) {
+        } catch (e: Exception) {
             throw IllegalArgumentException("first secnonce value is out of range.", e)
         }
         val k2_ = try {
             Scalar.fromBytesNonZeroChecked(
                 frostSecretNonce.getSecretNonce().sliceArray(32..63)
             )
-        } catch (e: Throwable) {
+        } catch (e: Exception) {
             throw IllegalArgumentException("second secnonce value is out of range.", e)
         }
 
@@ -221,10 +217,10 @@ data class FrostSessionContext(
         val sessionValues = getSessionValues()
 
         val s = try {
-            Scalar.fromBytesNonZeroChecked(
+            Scalar.fromBytesChecked(
                 frostPartialSignature.value.toByteArray()
             )
-        } catch (e: Throwable) {
+        } catch (e: Exception) {
             return false
         }
 
@@ -239,16 +235,26 @@ data class FrostSessionContext(
             return false
         }
 
-        val R_s1 = GroupElement.fromCompressedBytes(
-            PublicKey(
-                frostPublicNonce.value.sliceArray(0..32)
+        val R_s1 = try {
+            GroupElement.fromCompressedBytes(
+                PublicKey(
+                    frostPublicNonce.value.sliceArray(0..32)
+                )
             )
-        )
-        val R_s2 = GroupElement.fromCompressedBytes(
-            PublicKey(
-                frostPublicNonce.value.sliceArray(33..65)
+        } catch (e: Exception) {
+            logger.e("Failed to parse first half of the public nonce: ", e)
+            return false
+        }
+        val R_s2 = try {
+            GroupElement.fromCompressedBytes(
+                PublicKey(
+                    frostPublicNonce.value.sliceArray(33..65)
+                )
             )
-        )
+        } catch (e: Exception) {
+            logger.e("Failed to parse second half of the public nonce: ", e)
+            return false
+        }
 
         val Re_s_ = R_s1.add(R_s2.mul(sessionValues.b.toBigInteger()))
         val Re_s = if (sessionValues.R.hasEvenY()) {
@@ -259,7 +265,7 @@ data class FrostSessionContext(
 
         val P = try {
             GroupElement.fromCompressedBytes(publicShare)
-        } catch (e: Throwable) {
+        } catch (e: Exception) {
             logger.e("Failed to get P: ", e)
             return false
         }
@@ -274,10 +280,15 @@ data class FrostSessionContext(
 
         val multiple = P.mul(sessionValues.e.times(a).times(g_).toBigInteger())
 
-        return GroupElement.GENERATOR_POINT.mul(s.toBigInteger()).toUncompressedBytes()
-            .contentEquals(
-                (Re_s.add(multiple)).toUncompressedBytes()
-            )
+        return try {
+            GroupElement.GENERATOR_POINT.mul(s.toBigInteger()).toUncompressedBytes()
+                .contentEquals(
+                    (Re_s.add(multiple)).toUncompressedBytes()
+                )
+        } catch (e: Exception) {
+            // One of the operands is the point at infinity, which cannot be serialized.
+            false
+        }
     }
 
     fun partialSignatureAggregate(
@@ -291,13 +302,13 @@ data class FrostSessionContext(
 
         var s = Scalar(BigInteger.ZERO)
 
-        frostSignersContext.identifiers.zip(partialSignatures).forEach { (identifier, partialSignature) ->
+        partialSignatures.forEachIndexed { index, partialSignature ->
             val s_i = try {
                 Scalar.fromBytesChecked(
                     partialSignature.value.toByteArray()
                 )
-            } catch (e: Throwable) {
-                throw InvalidContributionException(identifier.toBigInteger(), "psig", e)
+            } catch (e: Exception) {
+                throw InvalidContributionException(index.toBigInteger(), "psig", e)
             }
             s = s.plus(s_i)
         }
